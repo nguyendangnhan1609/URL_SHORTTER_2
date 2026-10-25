@@ -52,6 +52,37 @@ describe('pages', () => {
     expect(on).toContain('data-ad-slot="top"');
     expect(on).toContain('id="ad-slot-top"');
   });
+  test('cookie lang with markup is rejected, not reflected', async () => {
+    const r = await request(app).get('/').set('Cookie', 'lang="><script>').set('Accept-Language', 'en-US');
+    expect(r.status).toBe(200);
+    expect(r.text).toContain('<html lang="en">');
+    expect(r.text).not.toContain('"><script>');
+    expect(r.text).not.toContain('lang=""');
+  });
+  test('ad slots present on GET / when ADS_ENABLED on', async () => {
+    const on = (await request(appAds).get('/')).text;
+    expect(on).toContain('data-ad-slot="top"');
+    expect(on).toContain('data-ad-slot="bottom"');
+    expect((await request(app).get('/')).text).not.toContain('data-ad-slot');
+  });
+  test('placeholder translated server-side', async () => {
+    const vi = (await request(app).get('/').set('Accept-Language', 'vi')).text;
+    expect(vi).toContain(`placeholder="${loc('vi')['create.urlPlaceholder']}"`);
+    const en = (await request(app).get('/').set('Accept-Language', 'en')).text;
+    expect(en).toContain(`placeholder="${loc('en')['create.urlPlaceholder']}"`);
+  });
+  test('404 html is localized by Accept-Language', async () => {
+    const r = await request(app).get('/no-such-slug-vi').set('Accept', 'text/html').set('Accept-Language', 'vi-VN,vi;q=0.9');
+    expect(r.status).toBe(404);
+    expect(r.text).toContain('<html lang="vi">');
+    expect(r.text).toContain(loc('vi')['notfound.body']);
+    expect(r.text).toContain('Không tìm thấy');
+  });
+  test('404 json unchanged', async () => {
+    const r = await request(app).get('/no-such-slug-json').set('Accept', 'application/json').set('Accept-Language', 'vi');
+    expect(r.status).toBe(404);
+    expect(r.body).toEqual({ error: 'NOT_FOUND' });
+  });
   test('redirect still works and locale served', async () => {
     await request(app).post('/api/links').send({ url: 'https://example.com/x', slug: 'ui-redir' });
     expect((await request(app).get('/ui-redir')).status).toBe(302);

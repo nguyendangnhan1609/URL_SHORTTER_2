@@ -40,15 +40,30 @@ function adSlot(name) {
   return `<div id="ad-slot-${name}" data-ad-slot="${name}" class="max-w-4xl mx-auto px-4 my-2"></div>`;
 }
 
+// Gắn thuộc tính placeholder đã dịch vào thẻ có data-i18n-placeholder.
+function setPlaceholder(tag, value) {
+  const base = tag.replace(/\splaceholder="[^"]*"/i, '');
+  return base.replace(/(\s*\/?>)$/, ` placeholder="${esc(value)}"$1`);
+}
+
 function renderPage(file, lang, adsEnabled) {
   if (!TEMPLATES[file]) TEMPLATES[file] = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
   const dict = DICTS[lang] || DICTS.en;
+  const has = (key) => Object.prototype.hasOwnProperty.call(dict, key);
   return TEMPLATES[file]
     .replace(/(<[a-z0-9]+\b[^>]*\bdata-i18n="([^"]+)"[^>]*>)[^<]*/gi, (m, tag, key) =>
-      Object.prototype.hasOwnProperty.call(dict, key) ? tag + esc(dict[key]) : m)
+      has(key) ? tag + esc(dict[key]) : m)
+    .replace(/<[a-z0-9]+\b[^>]*\bdata-i18n-placeholder="([^"]+)"[^>]*>/gi, (tag, key) =>
+      has(key) ? setPlaceholder(tag, dict[key]) : tag)
     .replace('{{LANG}}', lang)
     .replace('{{AD_TOP}}', adsEnabled ? adSlot('top') : '')
     .replace('{{AD_BOTTOM}}', adsEnabled ? adSlot('bottom') : '');
+}
+
+// Trang 404 HTML, dịch theo pickLang(req) (cookie -> Accept-Language -> en).
+function renderNotFound(lang) {
+  const dict = DICTS[lang] || DICTS.en;
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${esc(dict['notfound.title'])}</title></head><body><h1>404</h1><p>${esc(dict['notfound.body'])}</p><p><a href="/">${esc(dict['notfound.home'])}</a></p></body></html>`;
 }
 
 function pagesRouter(express, adsOption) {
@@ -63,4 +78,4 @@ function pagesRouter(express, adsOption) {
   return router;
 }
 
-module.exports = { pagesRouter, pickLang, renderPage, SUPPORTED };
+module.exports = { pagesRouter, pickLang, renderPage, renderNotFound, SUPPORTED };

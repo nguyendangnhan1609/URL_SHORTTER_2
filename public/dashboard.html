@@ -89,7 +89,7 @@
       var r = await App.api('/api/links?page=' + page + '&pageSize=20');
       totalPages = r.totalPages; render(r.items);
     } catch (err) {
-      lastCode = err.code; errEl.textContent = App.errText(err.code); errEl.classList.remove('hidden');
+      state = 'error'; lastCode = err.code; errEl.textContent = App.errText(err.code); errEl.classList.remove('hidden');
       rows.textContent = '';
     }
     pager();

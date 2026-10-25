@@ -45,25 +45,34 @@
 <script>
 (function () {
   var form = document.getElementById('form'), errEl = document.getElementById('error');
-  var lastCode = null;
+  var btn = document.getElementById('submit');
+  var lastCode = null, submitting = false;
   function showErr(code) { lastCode = code; errEl.textContent = App.errText(code); errEl.classList.remove('hidden'); }
-  I18N.onChange(function () { if (lastCode) errEl.textContent = App.errText(lastCode); });
+  function setSubmitting(on) {
+    submitting = on;
+    btn.disabled = on;
+    btn.textContent = I18N.t(on ? 'create.submitting' : 'create.submit');
+  }
+  I18N.onChange(function () {
+    if (lastCode) errEl.textContent = App.errText(lastCode);
+    // apply() ghi lại nhãn nút theo data-i18n; giữ nhãn "đang tạo" khi đang gửi.
+    if (submitting) btn.textContent = I18N.t('create.submitting');
+  });
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
-    var btn = document.getElementById('submit');
     errEl.classList.add('hidden'); lastCode = null;
     document.getElementById('result').classList.add('hidden');
     var body = { url: document.getElementById('url').value.trim() };
     var slug = document.getElementById('slug').value.trim();
     if (slug) body.slug = slug;
-    btn.disabled = true;
+    setSubmitting(true);
     try {
       var r = await App.api('/api/links', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       var a = document.getElementById('short');
       a.textContent = r.shortUrl; a.href = r.shortUrl;
       document.getElementById('result').classList.remove('hidden');
     } catch (err) { showErr(err.code); }
-    btn.disabled = false;
+    finally { setSubmitting(false); }
   });
   document.getElementById('copy').addEventListener('click', function () {
     App.copy(document.getElementById('short').textContent, this);

@@ -4,9 +4,7 @@ const { linksRouter } = require('./routes/links');
 const { LinkError, SLUG_RE, getLink } = require('./links');
 const { LruCache } = require('./cache');
 const { createClickCounter } = require('./clicks');
-const { pagesRouter } = require('./pages');
-
-const NOT_FOUND_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>404 Not Found</title></head><body><h1>404</h1><p>Link not found.</p><p><a href="/">Home</a></p></body></html>`;
+const { pagesRouter, pickLang, renderNotFound } = require('./pages');
 
 function createApp({ pool, cacheSize, adsEnabled } = {}) {
   const app = express();
@@ -36,7 +34,8 @@ function createApp({ pool, cacheSize, adsEnabled } = {}) {
         if (req.accepts(['html', 'json']) === 'json') {
           return res.status(404).json({ error: 'NOT_FOUND' });
         }
-        return res.status(404).type('html').send(NOT_FOUND_HTML);
+        res.set('Vary', 'Accept-Language, Cookie');
+        return res.status(404).type('html').send(renderNotFound(pickLang(req)));
       }
       res.redirect(302, url);
       const purpose = `${req.get('purpose') || ''} ${req.get('sec-purpose') || ''}`.toLowerCase();
