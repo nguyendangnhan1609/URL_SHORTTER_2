@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="create.title">Create short link</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+<header class="bg-white border-b">
+  <nav class="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center gap-4">
+    <span class="font-bold" data-i18n="app.name">URL Shortener</span>
+    <a href="/" class="text-blue-600 font-semibold" data-i18n="nav.create">Create</a>
+    <a href="/dashboard" class="text-slate-600 hover:text-blue-600" data-i18n="nav.dashboard">Dashboard</a>
+    <label class="ml-auto text-sm"><span class="sr-only" data-i18n="nav.language">Language</span>
+      <select id="lang-select" class="border rounded px-2 py-1"></select></label>
+  </nav>
+</header>
+{{AD_TOP}}
+<main class="max-w-4xl mx-auto px-4 py-6">
+<h1 class="text-2xl font-bold mb-4" data-i18n="create.heading">Create a short link</h1>
+<form id="form" class="bg-white p-4 rounded shadow space-y-4">
+  <div>
+    <label class="block text-sm mb-1" for="url" data-i18n="create.url">Original URL</label>
+    <input id="url" name="url" type="text" required maxlength="2048" autocomplete="off" data-i18n-placeholder="create.urlPlaceholder" class="w-full border rounded px-3 py-2">
+  </div>
+  <div>
+    <label class="block text-sm mb-1" for="slug" data-i18n="create.slug">Custom slug</label>
+    <input id="slug" name="slug" type="text" maxlength="32" autocomplete="off" data-i18n-placeholder="create.slugPlaceholder" class="w-full border rounded px-3 py-2">
+  </div>
+  <button id="submit" type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50" data-i18n="create.submit">Create</button>
+  <p id="error" class="text-red-600 text-sm hidden" role="alert"></p>
+</form>
+<section id="result" class="bg-white p-4 rounded shadow mt-4 hidden">
+  <p class="text-sm text-slate-500 mb-1" data-i18n="create.result">Your short link</p>
+  <div class="flex flex-wrap items-center gap-2">
+    <a id="short" class="text-blue-600 break-all" target="_blank" rel="noopener"></a>
+    <button id="copy" type="button" class="border rounded px-3 py-1 text-sm" data-i18n="common.copy">Copy</button>
+  </div>
+</section>
+</main>
+{{AD_BOTTOM}}
+<script src="/i18n.js"></script>
+<script src="/layout.js"></script>
+<script>
+(function () {
+  var form = document.getElementById('form'), errEl = document.getElementById('error');
+  var btn = document.getElementById('submit');
+  var lastCode = null, submitting = false;
+  function showErr(code) { lastCode = code; errEl.textContent = App.errText(code); errEl.classList.remove('hidden'); }
+  function setSubmitting(on) {
+    submitting = on;
+    btn.disabled = on;
+    btn.textContent = I18N.t(on ? 'create.submitting' : 'create.submit');
+  }
+  I18N.onChange(function () {
+    if (lastCode) errEl.textContent = App.errText(lastCode);
+    // apply() ghi lại nhãn nút theo data-i18n; giữ nhãn "đang tạo" khi đang gửi.
+    if (submitting) btn.textContent = I18N.t('create.submitting');
+  });
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    errEl.classList.add('hidden'); lastCode = null;
+    document.getElementById('result').classList.add('hidden');
+    var body = { url: document.getElementById('url').value.trim() };
+    var slug = document.getElementById('slug').value.trim();
+    if (slug) body.slug = slug;
+    setSubmitting(true);
+    try {
+      var r = await App.api('/api/links', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      var a = document.getElementById('short');
+      a.textContent = r.shortUrl; a.href = r.shortUrl;
+      document.getElementById('result').classList.remove('hidden');
+    } catch (err) { showErr(err.code); }
+    finally { setSubmitting(false); }
+  });
+  document.getElementById('copy').addEventListener('click', function () {
+    App.copy(document.getElementById('short').textContent, this);
+  });
+})();
+</script>
+</body>
+</html>
