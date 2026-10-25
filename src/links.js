@@ -24,16 +24,20 @@ function generateSlug(len = 7) {
 }
 
 function validateUrl(url) {
-  if (typeof url !== 'string' || url.length === 0 || url.length > MAX_URL) {
-    throw new LinkError('INVALID_URL', 400);
-  }
+  if (typeof url !== 'string') throw new LinkError('INVALID_URL', 400);
+  const trimmed = url.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_URL) throw new LinkError('INVALID_URL', 400);
+  if (!/^https?:\/\//i.test(trimmed)) throw new LinkError('INVALID_URL', 400);
   let u;
   try {
-    u = new URL(url);
+    u = new URL(trimmed);
   } catch {
     throw new LinkError('INVALID_URL', 400);
   }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new LinkError('INVALID_URL', 400);
+  if (u.username || u.password) throw new LinkError('INVALID_URL', 400);
+  if (u.href.length > MAX_URL) throw new LinkError('INVALID_URL', 400);
+  return u.href;
 }
 
 function validateSlug(slug) {
@@ -58,7 +62,7 @@ async function insert(pool, slug, url) {
 }
 
 async function createLink(pool, { url, slug } = {}) {
-  validateUrl(url);
+  url = validateUrl(url);
   if (slug !== undefined && slug !== null && slug !== '') {
     validateSlug(slug);
     try {
@@ -69,8 +73,10 @@ async function createLink(pool, { url, slug } = {}) {
     }
   }
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    const candidate = generateSlug();
+    if (RESERVED.has(candidate.toLowerCase())) continue;
     try {
-      return await insert(pool, generateSlug(), url);
+      return await insert(pool, candidate, url);
     } catch (err) {
       if (!isUnique(err)) throw err;
     }

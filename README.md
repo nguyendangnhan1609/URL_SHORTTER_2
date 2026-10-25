@@ -9,3 +9,6 @@ bản cải tiền từ URL SHORTTER cũ.
 
 ## Chạy test
 `npm test` (dùng pg-mem, không cần Postgres thật).
+
+## Cấu hình production
+Nên đặt `BASE_URL` (ví dụ `https://sho.rt`) khi chạy production. Nếu không đặt, `shortUrl` được dựng từ header `Host` của request nên có thể bị giả mạo/sai khi chạy sau proxy.

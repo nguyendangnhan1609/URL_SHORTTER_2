@@ -122,3 +122,42 @@ describe('body handling', () => {
     expect(typeof res.body.shortUrl).toBe('string');
   });
 });
+
+describe('URL normalisation and hardening', () => {
+  test.each([
+    ['credentials user:pass', 'https://user:pass@a.com/'],
+    ['credentials user only', 'https://user@a.com/'],
+    ['missing slashes', 'http:example.com'],
+    ['data scheme', 'data:text/html,<script>alert(1)</script>'],
+  ])('%s -> 400 INVALID_URL', async (_n, url) => {
+    const res = await post({ url });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'INVALID_URL' });
+  });
+
+  test('non-string url (number, array) -> 400 INVALID_URL', async () => {
+    for (const url of [123, ['https://a.com']]) {
+      const res = await post({ url });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'INVALID_URL' });
+    }
+  });
+
+  test('leading/trailing whitespace is trimmed -> 201', async () => {
+    const res = await post({ url: '  https://a.com/trim  ' });
+    expect(res.status).toBe(201);
+    expect(res.body.url).toBe('https://a.com/trim');
+  });
+
+  test('stored url is the normalised href', async () => {
+    const res = await post({ url: 'HTTPS://A.com' });
+    expect(res.status).toBe(201);
+    expect(res.body.url).toBe('https://a.com/');
+  });
+
+  test('slug longer than 32 chars -> 400 INVALID_SLUG', async () => {
+    const res = await post({ url: 'https://a.com/x', slug: 'd'.repeat(40) });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'INVALID_SLUG' });
+  });
+});
