@@ -84,4 +84,19 @@ async function createLink(pool, { url, slug } = {}) {
   throw new LinkError('SLUG_GENERATION_FAILED', 500);
 }
 
-module.exports = { createLink, LinkError, generateSlug, RESERVED };
+async function getLink(pool, slug) {
+  const r = await pool.query(
+    'SELECT slug, target_url, clicks, created_at FROM links WHERE slug = $1',
+    [slug]
+  );
+  const row = r.rows[0];
+  if (!row) return null;
+  return {
+    slug: row.slug,
+    url: row.target_url,
+    clicks: Number(row.clicks),
+    createdAt: row.created_at,
+  };
+}
+
+module.exports = { createLink, getLink, LinkError, generateSlug, RESERVED, SLUG_RE };

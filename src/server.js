@@ -5,7 +5,14 @@ async function main() {
   const pool = createPool();
   await migrate(pool, { advisoryLock: true });
   const port = Number(process.env.PORT) || 3000;
-  createApp({ pool }).listen(port, () => console.log(`Listening on ${port}`));
+  const app = createApp({ pool });
+  const server = app.listen(port, () => console.log(`Listening on ${port}`));
+  const onExit = () => {
+    server.close();
+    app.locals.clicks.stop().finally(() => process.exit(0));
+  };
+  process.on('SIGTERM', onExit);
+  process.on('SIGINT', onExit);
 }
 
 main().catch((err) => {
