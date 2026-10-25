@@ -10,5 +10,8 @@ bản cải tiền từ URL SHORTTER cũ.
 ## Chạy test
 `npm test` (dùng pg-mem, không cần Postgres thật).
 
+## Đếm click
+Click được ghi theo lô mỗi 1 giây (không ghi từng request). Request `HEAD` và prefetch (header `Purpose: prefetch` / `Sec-Purpose: prefetch`) không được đếm. `GET /api/links/:slug` flush trước khi đọc nên số liệu vẫn chính xác.
+
 ## Cấu hình production
 Nên đặt `BASE_URL` (ví dụ `https://sho.rt`) khi chạy production. Nếu không đặt, `shortUrl` được dựng từ header `Host` của request nên có thể bị giả mạo/sai khi chạy sau proxy.

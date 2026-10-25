@@ -37,7 +37,8 @@ function createApp({ pool, cacheSize } = {}) {
         return res.status(404).type('html').send(NOT_FOUND_HTML);
       }
       res.redirect(302, url);
-      clicks.record(slug);
+      const purpose = `${req.get('purpose') || ''} ${req.get('sec-purpose') || ''}`.toLowerCase();
+      if (req.method !== 'HEAD' && !purpose.includes('prefetch')) clicks.record(slug);
     } catch (err) {
       next(err);
     }
@@ -49,6 +50,10 @@ function createApp({ pool, cacheSize } = {}) {
       return res.status(400).json({ error: 'INVALID_BODY' });
     }
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'BODY_TOO_LARGE' });
+    const status = err.status || err.statusCode;
+    if (Number.isInteger(status) && status >= 400 && status < 500) {
+      return res.status(status).json({ error: 'BAD_REQUEST' });
+    }
     console.error(err);
     res.status(500).json({ error: 'INTERNAL_ERROR' });
   });

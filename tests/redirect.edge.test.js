@@ -65,10 +65,8 @@ test.each([
   spy.mockRestore();
 });
 
-// KNOWN BUG (found by independent test run): malformed percent-encoding makes Express
-// throw URIError with status 400, but the global error handler in src/app.js ignores
-// err.status and answers 500 INTERNAL_ERROR. Expected 400. Remove .failing once fixed.
-test.failing('malformed percent-encoding /%E0%A4%A -> 400, not 500', async () => {
+// Malformed percent-encoding: Express throws URIError (status 400) -> must answer 400.
+test('malformed percent-encoding /%E0%A4%A -> 400, not 500', async () => {
   const res = await request(app).get('/%E0%A4%A');
   expect(res.status).toBe(400);
 });
@@ -96,4 +94,56 @@ test('stop() flushes pending clicks before returning', async () => {
   counter.record('stop-1');
   await counter.stop();
   expect(await clicksOf('stop-1')).toBe(3);
+});
+
+test('HEAD and prefetch requests do not count clicks (still 302)', async () => {
+  await create({ url: 'https://example.com/nocount', slug: 'nocount-1' });
+  await request(app).head('/nocount-1').expect(302);
+  await request(app).get('/nocount-1').set('Purpose', 'prefetch').expect(302);
+  await request(app).get('/nocount-1').set('Sec-Purpose', 'prefetch').expect(302);
+  await app.locals.clicks.flush();
+  expect(await clicksOf('nocount-1')).toBe(0);
+  await request(app).get('/nocount-1').expect(302);
+  await app.locals.clicks.flush();
+  expect(await clicksOf('nocount-1')).toBe(1);
+});
+
+test('failed flush keeps clicks; next successful flush writes them all', async () => {
+  const { createClickCounter } = require('../src/clicks');
+  await create({ url: 'https://example.com/fail', slug: 'fail-1' });
+  const counter = createClickCounter(pool, { intervalMs: 60000 });
+  const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  const qSpy = jest.spyOn(pool, 'query').mockRejectedValueOnce(new Error('db down'));
+  counter.record('fail-1');
+  counter.record('fail-1');
+  await counter.flush();
+  expect(errSpy).toHaveBeenCalled();
+  qSpy.mockRestore();
+  errSpy.mockRestore();
+  expect(await clicksOf('fail-1')).toBe(0);
+  counter.record('fail-1');
+  await counter.stop();
+  expect(await clicksOf('fail-1')).toBe(3);
+});
+
+test('batch is dropped after 5 consecutive failures', async () => {
+  const { createClickCounter } = require('../src/clicks');
+  await create({ url: 'https://example.com/drop', slug: 'drop-1' });
+  const counter = createClickCounter(pool, { intervalMs: 60000 });
+  const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  const qSpy = jest.spyOn(pool, 'query').mockRejectedValue(new Error('db down'));
+  counter.record('drop-1');
+  for (let i = 0; i < 5; i++) await counter.flush();
+  qSpy.mockRestore();
+  errSpy.mockRestore();
+  await counter.stop();
+  expect(await clicksOf('drop-1')).toBe(0);
+});
+
+test('concurrent flush calls are coalesced and still exact', async () => {
+  await create({ url: 'https://example.com/co', slug: 'coal-1' });
+  await Promise.all(Array.from({ length: 10 }, () => request(app).get('/coal-1').expect(302)));
+  await Promise.all(Array.from({ length: 5 }, () => request(app).get('/api/links/coal-1')));
+  const res = await request(app).get('/api/links/coal-1').expect(200);
+  expect(res.body.clicks).toBe(10);
 });
