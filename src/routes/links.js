@@ -18,6 +18,43 @@ function linksRouter() {
       next(err);
     }
   });
+  router.get('/', async (req, res, next) => {
+    try {
+      const parse = (v, def, max) => {
+        if (v === undefined) return def;
+        if (typeof v !== 'string' || !/^\d+$/.test(v)) throw new LinkError('INVALID_PAGINATION', 400);
+        const n = Number(v);
+        if (!Number.isSafeInteger(n) || n < 1 || (max && n > max)) throw new LinkError('INVALID_PAGINATION', 400);
+        return n;
+      };
+      const page = parse(req.query.page, 1);
+      const pageSize = parse(req.query.pageSize, 20, 100);
+      const clicks = req.app.locals.clicks;
+      if (clicks) await clicks.flush();
+      const pool = req.app.locals.pool;
+      const total = Number((await pool.query('SELECT COUNT(*) AS c FROM links')).rows[0].c);
+      const r = await pool.query(
+        'SELECT slug, target_url, clicks, created_at FROM links ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2',
+        [pageSize, (page - 1) * pageSize]
+      );
+      const base = baseUrl(req);
+      res.json({
+        items: r.rows.map((row) => ({
+          slug: row.slug,
+          url: row.target_url,
+          shortUrl: `${base}/${row.slug}`,
+          clicks: Number(row.clicks),
+          createdAt: row.created_at,
+        })),
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
   router.get('/:slug', async (req, res, next) => {
     try {
       const { slug } = req.params;
