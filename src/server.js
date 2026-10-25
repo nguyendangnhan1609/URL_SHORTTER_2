@@ -3,7 +3,7 @@ const { createApp } = require('./app');
 
 async function main() {
   const pool = createPool();
-  await migrate(pool);
+  await migrate(pool, { advisoryLock: true });
   const port = Number(process.env.PORT) || 3000;
   createApp({ pool }).listen(port, () => console.log(`Listening on ${port}`));
 }
