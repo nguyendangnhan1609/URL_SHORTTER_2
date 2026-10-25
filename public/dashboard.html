@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="dashboard.title">Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+<header class="bg-white border-b">
+  <nav class="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center gap-4">
+    <span class="font-bold" data-i18n="app.name">URL Shortener</span>
+    <a href="/" class="text-slate-600 hover:text-blue-600" data-i18n="nav.create">Create</a>
+    <a href="/dashboard" class="text-blue-600 font-semibold" data-i18n="nav.dashboard">Dashboard</a>
+    <label class="ml-auto text-sm"><span class="sr-only" data-i18n="nav.language">Language</span>
+      <select id="lang-select" class="border rounded px-2 py-1"></select></label>
+  </nav>
+</header>
+{{AD_TOP}}
+<main class="max-w-4xl mx-auto px-4 py-6">
+<h1 class="text-2xl font-bold mb-4" data-i18n="dashboard.heading">Links</h1>
+<p id="error" class="text-red-600 text-sm mb-2 hidden" role="alert"></p>
+<div class="bg-white rounded shadow overflow-x-auto">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-100 text-left">
+      <tr>
+        <th class="px-3 py-2" data-i18n="dashboard.colShort">Short link</th>
+        <th class="px-3 py-2" data-i18n="dashboard.colUrl">Original URL</th>
+        <th class="px-3 py-2" data-i18n="dashboard.colClicks">Clicks</th>
+        <th class="px-3 py-2 whitespace-nowrap" data-i18n="dashboard.colCreated">Created</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+<div class="flex items-center justify-between mt-4">
+  <button id="prev" type="button" class="border rounded px-3 py-1 bg-white disabled:opacity-50" data-i18n="dashboard.prev">Previous</button>
+  <span id="pageinfo" class="text-sm"></span>
+  <button id="next" type="button" class="border rounded px-3 py-1 bg-white disabled:opacity-50" data-i18n="dashboard.next">Next</button>
+</div>
+</main>
+{{AD_BOTTOM}}
+<script src="/i18n.js"></script>
+<script src="/layout.js"></script>
+<script>
+(function () {
+  var page = 1, totalPages = 1, lastCode = null, state = 'loading';
+  var rows = document.getElementById('rows'), errEl = document.getElementById('error');
+  var prev = document.getElementById('prev'), next = document.getElementById('next'), info = document.getElementById('pageinfo');
+
+  function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+  function cell(tr, cls) { var td = document.createElement('td'); td.className = 'px-3 py-2 ' + cls; tr.appendChild(td); return td; }
+
+  function pager() {
+    info.textContent = I18N.t('dashboard.pageInfo', { page: page, total: Math.max(totalPages, 1) });
+    prev.disabled = page <= 1; next.disabled = page >= totalPages;
+  }
+  function message(key) {
+    rows.textContent = '';
+    var tr = document.createElement('tr'), td = cell(tr, 'text-slate-500');
+    td.colSpan = 4; td.textContent = I18N.t(key); rows.appendChild(tr);
+  }
+  function render(items) {
+    rows.textContent = '';
+    if (!items.length) { state = 'empty'; return message('dashboard.empty'); }
+    state = 'data';
+    items.forEach(function (it) {
+      var tr = document.createElement('tr'); tr.className = 'border-t';
+      var c1 = cell(tr, 'whitespace-nowrap');
+      var a = document.createElement('a');
+      a.href = it.shortUrl; a.textContent = '/' + it.slug; a.target = '_blank'; a.rel = 'noopener';
+      a.className = 'text-blue-600 mr-2';
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'border rounded px-2 py-0.5 text-xs';
+      b.setAttribute('data-i18n', 'common.copy'); b.textContent = I18N.t('common.copy');
+      b.addEventListener('click', function () { App.copy(it.shortUrl, b); });
+      c1.appendChild(a); c1.appendChild(b);
+      var c2 = cell(tr, 'break-all max-w-xs');
+      c2.textContent = truncate(it.url, 60); c2.title = it.url;
+      cell(tr, 'tabular-nums').textContent = String(it.clicks);
+      cell(tr, 'whitespace-nowrap').textContent = new Date(it.createdAt).toLocaleString(I18N.getLang());
+      rows.appendChild(tr);
+    });
+  }
+  async function load() {
+    errEl.classList.add('hidden'); lastCode = null;
+    state = 'loading'; message('dashboard.loading');
+    try {
+      var r = await App.api('/api/links?page=' + page + '&pageSize=20');
+      totalPages = r.totalPages; render(r.items);
+    } catch (err) {
+      lastCode = err.code; errEl.textContent = App.errText(err.code); errEl.classList.remove('hidden');
+      rows.textContent = '';
+    }
+    pager();
+  }
+  I18N.onChange(function () {
+    if (lastCode) errEl.textContent = App.errText(lastCode);
+    if (state === 'loading') message('dashboard.loading'); else if (state === 'empty') message('dashboard.empty');
+    pager();
+  });
+  prev.addEventListener('click', function () { if (page > 1) { page--; load(); } });
+  next.addEventListener('click', function () { if (page < totalPages) { page++; load(); } });
+  I18N.ready.then(load);
+})();
+</script>
+</body>
+</html>
