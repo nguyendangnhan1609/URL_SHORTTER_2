@@ -75,6 +75,8 @@ function pagesRouter(express, adsOption) {
   };
   router.get(['/', '/index.html'], send('index.html'));
   router.get(['/dashboard', '/dashboard.html'], send('dashboard.html'));
+  router.get(['/login', '/login.html'], send('login.html'));
+  router.get(['/register', '/register.html'], send('register.html'));
   return router;
 }
 

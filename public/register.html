@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="auth.register.title">T</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+<header class="bg-white border-b">
+  <nav class="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center gap-4">
+    <a href="/" class="font-bold" data-i18n="app.name">URL Shortener</a>
+    <label class="ml-auto text-sm"><span class="sr-only" data-i18n="nav.language">Language</span>
+      <select id="lang-select" class="border rounded px-2 py-1"></select></label>
+  </nav>
+</header>
+<main class="max-w-sm mx-auto px-4 py-6">
+<h1 class="text-2xl font-bold mb-4" data-i18n="auth.register.title">T</h1>
+<form id="form" class="bg-white p-4 rounded shadow space-y-4">
+  <div><label class="block text-sm mb-1" for="email" data-i18n="auth.email">Email</label>
+    <input id="email" type="email" required autocomplete="email" class="w-full border rounded px-3 py-2"></div>
+  <div><label class="block text-sm mb-1" for="password" data-i18n="auth.password">Password</label>
+    <input id="password" type="password" required minlength="8" autocomplete="new-password" class="w-full border rounded px-3 py-2">
+    <p class="text-xs text-slate-500 mt-1" data-i18n="auth.passwordHint">At least 8 characters</p></div>
+  <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700" data-i18n="auth.register.submit">S</button>
+  <p id="error" class="text-red-600 text-sm hidden" role="alert"></p>
+  <p class="text-sm"><a class="text-blue-600" href="/login" data-i18n="auth.haveAccount">x</a></p>
+</form>
+</main>
+<script src="/i18n.js"></script>
+<script src="/layout.js"></script>
+<script>
+(function () {
+  var errEl = document.getElementById('error'), lastCode = null;
+  I18N.onChange(function () { if (lastCode) errEl.textContent = App.errText(lastCode); });
+  document.getElementById('form').addEventListener('submit', async function (e) {
+    e.preventDefault(); errEl.classList.add('hidden'); lastCode = null;
+    try {
+      await App.api('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value }) });
+      location.href = '/dashboard';
+    } catch (err) { lastCode = err.code; errEl.textContent = App.errText(err.code); errEl.classList.remove('hidden'); }
+  });
+})();
+</script>
+</body>
+</html>

@@ -27,3 +27,17 @@ Thêm ngôn ngữ: tạo `public/locales/<mã>.json` (đủ key như `en.json`, 
 
 ## Quảng cáo (chỉ chuẩn bị chỗ)
 Đặt `ADS_ENABLED=true` để HTML có thêm container `#ad-slot-top` và `#ad-slot-bottom` (`data-ad-slot`). Mặc định (false/không đặt) không có slot nào. Chưa tích hợp nhà quảng cáo nào.
+
+## Biến môi trường bảo mật / giới hạn
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `GUEST_LINKS_PER_HOUR` | 30 | Số link khách (chưa đăng nhập) được tạo mỗi giờ theo IP |
+| `LOGIN_MAX_FAILS` | 5 | Số lần đăng nhập sai tối đa/15 phút theo cặp email+IP; theo IP là 5x, theo email là 3x |
+| `REGISTER_PER_HOUR` | 10 | Số lần `POST /api/auth/register` mỗi giờ theo IP |
+| `TRUST_PROXY` | tắt | Cấu hình `trust proxy` của Express (`true`, số hop, hoặc danh sách IP/CIDR). Chỉ bật khi chạy sau reverse proxy tin cậy, nếu không `req.ip` có thể bị giả mạo |
+| `COOKIE_SECURE` | theo `NODE_ENV` | `true`/`false` ép cờ Secure của cookie phiên |
+| `NODE_ENV` | - | `production` bật cookie Secure |
+
+Lưu ý: `docker-compose.yml` đặt `NODE_ENV=production`, nên cookie có cờ Secure và trình duyệt sẽ không gửi lại qua HTTP. Khi chạy thử qua `http://localhost` hãy đặt `COOKIE_SECURE=false` (ví dụ `COOKIE_SECURE=false docker compose up`); với HTTPS để mặc định.
+
+Khác: session hết hạn được xoá mỗi giờ và khi đăng nhập. `GET /api/links/:slug` của link thuộc người dùng chỉ trả về cho chủ sở hữu (người khác nhận 404); redirect `GET /:slug` vẫn công khai.
