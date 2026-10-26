@@ -89,7 +89,7 @@ function linksRouter() {
       const group = async (col, limit) => {
         const rows = (await pool.query(
           `SELECT ${col} AS k, COUNT(*) AS c FROM link_clicks WHERE link_id = $1 GROUP BY ${col} ORDER BY c DESC, k ASC${limit ? ` LIMIT ${limit}` : ''}`, [id])).rows;
-        return rows.map((r) => ({ [col === 'referrer_host' ? 'referrer' : col]: r.k === null ? 'direct' : r.k, count: Number(r.c) }));
+        return rows.map((r) => ({ [col === 'referrer_host' ? 'referrer' : col]: r.k, count: Number(r.c) }));
       };
       res.json({
         total: link.clicks,
@@ -148,7 +148,10 @@ function linksRouter() {
         [...params, pageSize, (page - 1) * pageSize]
       );
       const base = baseUrl(req);
+      const sum = (await pool.query(
+        'SELECT COUNT(*) AS n, COALESCE(SUM(clicks), 0) AS c FROM links WHERE user_id = $1', [req.user.id])).rows[0];
       res.json({
+        summary: { totalLinks: Number(sum.n), totalClicks: Number(sum.c) },
         items: r.rows.map((row) => {
           const l = toPublic(row);
           return { ...l, shortUrl: `${base}/${row.slug}`, status: linkStatus(l) };
@@ -175,7 +178,7 @@ function linksRouter() {
       if (userId != null && !(req.user && String(req.user.id) === String(userId))) {
         throw new AppError('NOT_FOUND', 404);
       }
-      res.json(pub);
+      res.json({ ...pub, shortUrl: `${baseUrl(req)}/${pub.slug}`, status: linkStatus(pub) });
     } catch (err) {
       next(err);
     }
