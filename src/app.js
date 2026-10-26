@@ -7,6 +7,7 @@ const { createClickCounter } = require('./clicks');
 const { authRouter, loadUser, csrf, makeLoginLimiter, startSessionCleanup } = require('./auth');
 const { clickMeta } = require('./ua');
 const { RateLimiter } = require('./ratelimit');
+const { statsRouter } = require('./routes/stats');
 const { pagesRouter, pickLang, renderNotFound, renderGone, renderPreview } = require('./pages');
 
 function createApp({ pool, cacheSize, adsEnabled, guestLinkLimit, loginLimiter } = {}) {
@@ -27,6 +28,7 @@ function createApp({ pool, cacheSize, adsEnabled, guestLinkLimit, loginLimiter }
     guestLinkLimit || Number(process.env.GUEST_LINKS_PER_HOUR) || 30, 3600 * 1000);
   app.use('/api', csrf, loadUser(pool));
   app.use('/api/auth', authRouter({ loginLimiter: loginLimiter || makeLoginLimiter() }));
+  app.use('/api/stats', statsRouter(express));
   app.use('/api/links', linksRouter());
   app.use(pagesRouter(express, adsEnabled));
   app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));

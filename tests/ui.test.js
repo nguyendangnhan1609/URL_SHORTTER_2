@@ -110,6 +110,100 @@ describe('locales', () => {
   });
 });
 
+describe('homepage F6 (vi/en)', () => {
+  const SECTIONS = ['hero', 'form', 'result', 'stats', 'features', 'how', 'faq', 'cta'];
+  const FEATURES = ['custom', 'stats', 'qr', 'manage', 'bulk', 'preview'];
+  test.each(['vi', 'en'])('%s has all sections, 6 features, 3 steps, >=5 faq, header/footer hooks', async (lang) => {
+    const t = (await request(app).get('/').set('Accept-Language', lang)).text;
+    expect(t).toContain(`<html lang="${lang}">`);
+    for (const id of SECTIONS) expect(t).toContain(`id="${id}"`);
+    for (const f of FEATURES) {
+      expect(t).toContain(`data-feature="${f}"`);
+      expect(t).toContain(loc(lang)[`features.${f}.title`]);
+    }
+    expect(t.match(/data-faq/g).length).toBeGreaterThanOrEqual(5);
+    for (const i of [1, 2, 3]) expect(t).toContain(loc(lang)[`how.step${i}.title`]);
+    expect(t).toContain('id="site-header"');
+    expect(t).toContain('id="site-footer"');
+    expect(t).toContain('id="stat-links"');
+    expect(t).toContain('id="advanced"');
+    expect(t).toContain('id="qr-download"');
+    expect(t).toContain(loc(lang)['hero.subtitle']);
+    expect(t).toContain(loc(lang)['cta.title']);
+  });
+  test('login/register pages localized with password toggle', async () => {
+    for (const p of ['/login', '/register']) {
+      for (const lang of ['vi', 'en']) {
+        const t = (await request(app).get(p).set('Accept-Language', lang)).text;
+        expect(t).toContain('id="toggle-pw"');
+        expect(t).toContain(loc(lang)[p === '/login' ? 'auth.login.heading' : 'auth.register.heading']);
+      }
+    }
+  });
+  test('all keys used in html/js exist in both locales', () => {
+    const vi = loc('vi'), en = loc('en');
+    const dir = path.join(__dirname, '..', 'public');
+    for (const f of ['index.html', 'login.html', 'register.html', 'dashboard.html', 'layout.js']) {
+      const src = fs.readFileSync(path.join(dir, f), 'utf8');
+      const keys = [...src.matchAll(/data-i18n(?:-placeholder)?="([^"]+)"/g)].map((m) => m[1]);
+      keys.push(...[...src.matchAll(/I18N\.t\('([^']+)'\)/g)].map((m) => m[1]));
+      keys.push(...[...src.matchAll(/(?:^|[ (,])el\('[a-z0-9]+', [^,]+, '([a-z][A-Za-z0-9.]+)'/g)].map((m) => m[1]));
+      for (const k of keys) { expect(vi[k]).toBeDefined(); expect(en[k]).toBeDefined(); }
+    }
+  });
+  test('no empty translations; vi and en key sets identical', () => {
+    const vi = loc('vi'), en = loc('en');
+    expect(Object.keys(vi).sort()).toEqual(Object.keys(en).sort());
+    for (const k of Object.keys(vi)) { expect(String(vi[k]).length).toBeGreaterThan(0); expect(String(en[k]).length).toBeGreaterThan(0); }
+  });
+  test('ads slots still hidden/shown on new homepage', async () => {
+    expect((await request(app).get('/')).text).not.toContain('data-ad-slot');
+    expect((await request(appAds).get('/')).text).toContain('data-ad-slot="bottom"');
+  });
+});
+
+describe('GET /api/stats/public', () => {
+  test('returns totals and is cached', async () => {
+    const a = await request(app).get('/api/stats/public');
+    expect(a.status).toBe(200);
+    expect(a.body.totalLinks).toBeGreaterThanOrEqual(1);
+    expect(typeof a.body.totalClicks).toBe('number');
+    expect(a.headers['cache-control']).toMatch(/max-age=60/);
+    await request(app).post('/api/links').send({ url: 'https://example.com/cache-check' });
+    const b = await request(app).get('/api/stats/public');
+    expect(b.body).toEqual(a.body); // vẫn trong 60s
+  });
+  test('cache expires after ttl', async () => {
+    const express = require('express');
+    const { statsRouter } = require('../src/routes/stats');
+    let t = 1000;
+    const mini = express();
+    mini.locals.pool = pool;
+    mini.use('/s', statsRouter(express, { ttlMs: 60000, now: () => t }));
+    const a = await request(mini).get('/s/public');
+    await request(app).post('/api/links').send({ url: 'https://example.com/ttl-check' });
+    expect((await request(mini).get('/s/public')).body).toEqual(a.body);
+    t += 60001;
+    expect((await request(mini).get('/s/public')).body.totalLinks).toBe(a.body.totalLinks + 1);
+  });
+});
+
+describe('qr.js', () => {
+  const QR = require('../public/qr.js');
+  test('matrix is square with finder patterns', () => {
+    const m = QR.matrix('https://example.com/abc');
+    expect(m.length).toBeGreaterThanOrEqual(21);
+    for (const row of m) expect(row.length).toBe(m.length);
+    const n = m.length;
+    for (const [r, c] of [[0, 0], [0, n - 7], [n - 7, 0]]) {
+      expect(m[r][c]).toBe(true); expect(m[r + 3][c + 3]).toBe(true); expect(m[r + 1][c + 1]).toBe(false);
+    }
+  });
+  test('different text gives different matrix', () => {
+    expect(JSON.stringify(QR.matrix('https://a.io/1'))).not.toBe(JSON.stringify(QR.matrix('https://a.io/2')));
+  });
+});
+
 describe('client pickLang', () => {
   const sup = ['vi', 'en'];
   test('order', () => {
