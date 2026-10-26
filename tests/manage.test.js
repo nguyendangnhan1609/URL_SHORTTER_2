@@ -243,3 +243,16 @@ test('every new i18n key exists in vi and en', () => {
   }
   expect(Object.keys(vi).sort()).toEqual(Object.keys(en).sort());
 });
+
+describe('SELF_REFERENCE host normalisation', () => {
+  test('www. prefix, trailing dot, case and combos are rejected', async () => {
+    for (const u of ['https://www.sho.rt/a', 'https://sho.rt./a', 'https://WWW.Sho.RT./a', 'http://sho.rt/a']) {
+      await request(app).post('/api/links').set(H).set('Host', 'sho.rt').send({ url: u }).expect(400).expect({ error: 'SELF_REFERENCE' });
+    }
+    // Host header cũng được chuẩn hoá
+    await request(app).post('/api/links').set(H).set('Host', 'www.sho.rt').send({ url: 'https://sho.rt./a' }).expect(400).expect({ error: 'SELF_REFERENCE' });
+    // domain khác (kể cả subdomain khác) vẫn được phép
+    await request(app).post('/api/links').set(H).set('Host', 'sho.rt').send({ url: 'https://blog.sho.rt/a' }).expect(201);
+    await request(app).post('/api/links').set(H).set('Host', 'sho.rt').send({ url: 'https://notsho.rt/a' }).expect(201);
+  });
+});

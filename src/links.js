@@ -42,13 +42,18 @@ function validateUrl(url) {
 }
 
 // selfHosts: danh sách host (kèm port nếu có) của chính dịch vụ; URL đích không được trỏ về đó.
+// Chuẩn hoá host để so sánh: chữ thường, bỏ dấu chấm cuối, bỏ tiền tố "www.", giữ port (nếu khác mặc định).
 function normHost(h) {
-  try { return new URL(`http://${String(h).trim()}`).host.toLowerCase(); } catch { return ''; }
+  try {
+    const u = new URL(`http://${String(h).trim()}`);
+    const name = u.hostname.toLowerCase().replace(/\.+$/, '').replace(/^www\./, '');
+    return u.port ? `${name}:${u.port}` : name;
+  } catch { return ''; }
 }
 
 function checkSelfReference(url, selfHosts) {
   if (!selfHosts || !selfHosts.length) return;
-  const host = new URL(url).host.toLowerCase();
+  const host = normHost(new URL(url).host);
   if (selfHosts.some((h) => h && normHost(h) === host)) throw new AppError('SELF_REFERENCE', 400);
 }
 
