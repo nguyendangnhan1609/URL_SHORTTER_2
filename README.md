@@ -1,6 +1,35 @@
 # URL_SHORTENER_2
 bản cải tiền từ URL SHORTTER cũ.
 
+## Tính năng
+- **Tài khoản**: đăng ký, đăng nhập, đăng xuất, đổi mật khẩu; mỗi người chỉ thấy và quản lý link của mình. Khách chưa đăng nhập vẫn tạo được link (giới hạn theo IP).
+- **Quản lý link**: sửa URL/tiêu đề/ghi chú, bật/tắt, đặt hạn dùng và giới hạn lượt click, xoá, tìm kiếm và lọc theo trạng thái, phân trang.
+- **Thống kê**: tổng click, 30 ngày theo ngày, top referrer, thiết bị và trình duyệt.
+- **Mã QR** cho mỗi link.
+- **Tạo hàng loạt**: tối đa 50 URL mỗi lần, lỗi từng dòng không ảnh hưởng dòng khác.
+- **Xem trước**: `/preview/:slug` hiển thị URL đích trước khi chuyển hướng.
+- **Đa ngôn ngữ**: tiếng Việt và tiếng Anh.
+- **Trang chủ**: form tạo link nhanh, kèm nút Copy.
+
+## Chạy thử trong 3 bước
+1. Khởi chạy (cần Docker):
+   ```
+   COOKIE_SECURE=false docker compose up --build
+   ```
+   `COOKIE_SECURE=false` cần khi chạy qua `http://localhost`, nếu không cookie phiên có cờ Secure và đăng nhập sẽ không giữ được. Dùng `PORT=<cổng>` nếu muốn đổi cổng host (mặc định 3000).
+2. Mở http://localhost:3000 (hoặc đúng cổng bạn đã đặt bằng `PORT`).
+3. Vào `/register` đăng ký tài khoản, sau đó tạo link ở trang chủ hoặc trên `/dashboard`.
+
+Chạy test: `npm i` rồi `npm test`. Test dùng pg-mem (Postgres trong bộ nhớ), không cần Postgres thật hay Docker.
+
+## Lưu ý đã biết
+- Tailwind được tải qua CDN (`cdn.tailwindcss.com`), nên giao diện cần internet.
+- Chưa có quên mật khẩu qua email (chưa tích hợp dịch vụ email).
+- Bảng `link_clicks` chưa có cơ chế dọn dữ liệu cũ, dữ liệu sẽ tăng theo số click.
+- Cache redirect nằm trong bộ nhớ tiến trình, nên hiện chỉ nên chạy 1 instance.
+- Chưa kiểm giao diện bằng trình duyệt thật.
+- Migration 001–004 đã smoke test trên Postgres thật (embedded-postgres, không qua Docker compose).
+
 ## Chạy nhanh
 - Docker: `docker compose up --build` (app tại http://localhost:3000).
   - Lưu ý: `docker-compose.yml` dùng mật khẩu DEV (`shortener`/`shortener`) chỉ để phát triển local. KHÔNG dùng cho production; hãy đổi mật khẩu và quản lý secret qua biến môi trường/secret manager.
