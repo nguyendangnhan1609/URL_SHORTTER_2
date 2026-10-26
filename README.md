@@ -46,3 +46,9 @@ Khác: session hết hạn được xoá mỗi giờ và khi đăng nhập. `GET
 - `PATCH /api/links/:slug` (đăng nhập, chỉ chủ link; người khác nhận 404): sửa `url`, `title`, `note`, `isActive`, `expiresAt`, `maxClicks`. `DELETE /api/links/:slug` xoá link.
 - `POST /api/links` nhận thêm `title`, `note`, `expiresAt`, `maxClicks`. `GET /api/links?q=&status=active|disabled|expired&page=&pageSize=`.
 - Link tắt / hết hạn / hết lượt click trả 410 (không redirect, không đếm click). `GET /preview/:slug` hiển thị URL đích trước khi đi. URL đích trỏ về chính domain dịch vụ (Host hoặc `BASE_URL`) bị từ chối với `SELF_REFERENCE`.
+
+## Thống kê và tạo hàng loạt (API)
+- `GET /api/links/:slug/stats` (đăng nhập, chỉ chủ link; người khác / link khách nhận 404): `{ total, last7days, byDay, byReferrer, byDevice, byBrowser }`. `byDay` luôn đủ 30 ngày liên tục (UTC, cũ → mới, ngày không có click = 0); `last7days` là tổng 7 ngày cuối của `byDay`; `byReferrer` top 10 (`referrer` = hostname hoặc `direct`); `byDevice` = `desktop|mobile|tablet|bot-unknown`; `byBrowser` = `chrome|firefox|safari|edge|other`. `total` lấy từ bộ đếm của link (gồm cả click trước khi có thống kê chi tiết).
+- Chi tiết click lưu ở bảng `link_clicks` (thời điểm, hostname referrer, thiết bị, trình duyệt; KHÔNG lưu IP hay User-Agent gốc), ghi theo lô cùng luồng đếm click nên không làm chậm redirect. HEAD/prefetch không được ghi. Xoá link sẽ xoá chi tiết (ON DELETE CASCADE).
+- Link có `maxClicks` được tăng click nguyên tử trong DB (`UPDATE ... WHERE clicks < max_clicks`), nên song song cũng không vượt giới hạn; khi hết lượt trả 410.
+- `POST /api/links/bulk` (đăng nhập, cần header CSRF): body `{ "urls": [...] }`, tối đa 50 (quá → 400 `BULK_TOO_MANY`; rỗng/sai kiểu → 400 `INVALID_BODY`). Trả `{ results: [{ index, ok: true, link } | { index, ok: false, error }], created, failed }`; mỗi dòng lỗi (`INVALID_URL`, `SELF_REFERENCE`, ...) không ảnh hưởng dòng khác. Slug luôn tự sinh. Body tối đa 200KB cho route này.

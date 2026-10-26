@@ -1,12 +1,24 @@
 // Batches click increments per slug and flushes them to the DB periodically.
 function createClickCounter(pool, { intervalMs = 1000, maxPending = 50000, maxFailures = 5 } = {}) {
   let pending = new Map();
+  let events = []; // chi tiết click chờ ghi vào link_clicks: { slug, at, referrer, device, browser }
   const failures = new Map();
   let running = null; // promise of the flush currently executing
   let queued = null; // promise of the single follow-up flush shared by late callers
 
-  function record(slug) {
+  function recordEvent(slug, meta) {
+    if (!meta) return;
+    if (events.length >= maxPending) {
+      console.error('click flush: events full, dropping click detail');
+      return;
+    }
+    events.push({ slug, ...meta });
+  }
+
+  // Đếm theo lô + ghi chi tiết (bất đồng bộ, không chặn redirect).
+  function record(slug, meta) {
     pending.set(slug, (pending.get(slug) || 0) + 1);
+    recordEvent(slug, meta);
   }
 
   function requeue(slug, n) {
@@ -27,6 +39,8 @@ function createClickCounter(pool, { intervalMs = 1000, maxPending = 50000, maxFa
   async function run() {
     const batch = pending;
     pending = new Map();
+    const evs = events;
+    events = [];
     for (const [slug, n] of batch) {
       try {
         await pool.query('UPDATE links SET clicks = clicks + $2 WHERE slug = $1', [slug, n]);
@@ -36,6 +50,27 @@ function createClickCounter(pool, { intervalMs = 1000, maxPending = 50000, maxFa
         requeue(slug, n);
       }
     }
+    for (let i = 0; i < evs.length; i++) {
+      const e = evs[i];
+      try {
+        await pool.query(
+          'INSERT INTO link_clicks (link_id, clicked_at, referrer_host, device, browser) SELECT id, $2::timestamptz, $3::text, $4::text, $5::text FROM links WHERE slug = $1',
+          [e.slug, e.at, e.referrer, e.device, e.browser]
+        );
+      } catch (err) {
+        // Chi tiết thống kê là phụ: lỗi thì bỏ, không làm hỏng việc đếm.
+        console.error('click detail insert failed', err);
+      }
+    }
+  }
+
+  // Tăng click nguyên tử cho link có max_clicks: trả true nếu còn lượt (và đã tăng), false nếu đã hết.
+  async function tryConsume(slug) {
+    const r = await pool.query(
+      'UPDATE links SET clicks = clicks + 1 WHERE slug = $1 AND is_active = true AND (max_clicks IS NULL OR clicks < max_clicks) RETURNING clicks',
+      [slug]
+    );
+    return r.rows.length > 0;
   }
 
   // Coalesced: at most one running + one queued flush, however many callers.
@@ -67,7 +102,7 @@ function createClickCounter(pool, { intervalMs = 1000, maxPending = 50000, maxFa
     return flush();
   }
 
-  return { record, flush, stop };
+  return { record, recordEvent, tryConsume, flush, stop };
 }
 
 module.exports = { createClickCounter };

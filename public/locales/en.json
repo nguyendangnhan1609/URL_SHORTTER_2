@@ -75,5 +75,6 @@
   "error.INVALID_MAX_CLICKS": "Invalid click limit (integer from 1 to 1,000,000,000).",
   "error.INVALID_QUERY": "Invalid search query.",
   "error.INVALID_STATUS": "Invalid status filter (active, disabled or expired).",
-  "error.GONE": "This link is disabled or expired."
+  "error.GONE": "This link is disabled or expired.",
+  "error.BULK_TOO_MANY": "Too many URLs in one bulk request (max 50)."
 }

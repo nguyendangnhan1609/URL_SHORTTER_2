@@ -75,5 +75,6 @@
   "error.INVALID_MAX_CLICKS": "Giới hạn click không hợp lệ (số nguyên từ 1 đến 1.000.000.000).",
   "error.INVALID_QUERY": "Từ khoá tìm kiếm không hợp lệ.",
   "error.INVALID_STATUS": "Bộ lọc trạng thái không hợp lệ (active, disabled hoặc expired).",
-  "error.GONE": "Link này đã bị tắt hoặc hết hạn."
+  "error.GONE": "Link này đã bị tắt hoặc hết hạn.",
+  "error.BULK_TOO_MANY": "Quá nhiều URL trong một lần tạo hàng loạt (tối đa 50)."
 }

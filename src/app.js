@@ -5,6 +5,7 @@ const { AppError, SLUG_RE, getLink, linkStatus } = require('./links');
 const { LruCache } = require('./cache');
 const { createClickCounter } = require('./clicks');
 const { authRouter, loadUser, csrf, makeLoginLimiter, startSessionCleanup } = require('./auth');
+const { clickMeta } = require('./ua');
 const { RateLimiter } = require('./ratelimit');
 const { pagesRouter, pickLang, renderNotFound, renderGone, renderPreview } = require('./pages');
 
@@ -18,6 +19,8 @@ function createApp({ pool, cacheSize, adsEnabled, guestLinkLimit, loginLimiter }
   app.locals.cache = cache;
   app.locals.sessionCleanup = startSessionCleanup(pool);
   app.locals.clicks = clicks;
+  // Bulk cần body lớn hơn (tối đa 50 URL x 2048 ký tự); parse trước parser mặc định.
+  app.use('/api/links/bulk', express.json({ limit: '200kb' }));
   app.use(express.json({ limit: '10kb' }));
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   app.locals.guestLimiter = new RateLimiter(
@@ -58,7 +61,7 @@ function createApp({ pool, cacheSize, adsEnabled, guestLinkLimit, loginLimiter }
     if (useCache && link.maxClicks == null) {
       cache.set(slug, { url: link.url, expiresAt: link.expiresAt ? new Date(link.expiresAt).getTime() : null });
     }
-    return { url: link.url };
+    return { url: link.url, limited: link.maxClicks != null };
   }
   app.get('/preview/:slug', async (req, res, next) => {
     try {
@@ -80,9 +83,16 @@ function createApp({ pool, cacheSize, adsEnabled, guestLinkLimit, loginLimiter }
       const r = SLUG_RE.test(slug) ? await resolve(slug, { useCache: true }) : null;
       if (r === null) return notFound(req, res);
       if (r === 'gone') return gone(req, res);
-      res.redirect(302, r.url);
       const purpose = `${req.get('purpose') || ''} ${req.get('sec-purpose') || ''}`.toLowerCase();
-      if (req.method !== 'HEAD' && !purpose.includes('prefetch')) clicks.record(slug);
+      const counts = req.method !== 'HEAD' && !purpose.includes('prefetch');
+      if (counts && r.limited) {
+        // Link giới hạn click: tăng nguyên tử trong DB, hết lượt thì 410 (không vượt max_clicks khi song song).
+        if (!(await clicks.tryConsume(slug))) return gone(req, res);
+        clicks.recordEvent(slug, clickMeta(req));
+        return res.redirect(302, r.url);
+      }
+      res.redirect(302, r.url);
+      if (counts) clicks.record(slug, clickMeta(req));
     } catch (err) {
       next(err);
     }

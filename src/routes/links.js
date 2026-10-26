@@ -16,6 +16,7 @@ function selfHosts(req) {
   return hosts.filter(Boolean);
 }
 
+const BULK_MAX = 50;
 const escLike = (s) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 function linksRouter() {
@@ -34,6 +35,70 @@ function linksRouter() {
         selfHosts: selfHosts(req),
       });
       res.status(201).json({ ...link, shortUrl: `${baseUrl(req)}/${link.slug}` });
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.post('/bulk', requireUser, async (req, res, next) => {
+    try {
+      const urls = req.body && typeof req.body === 'object' ? req.body.urls : undefined;
+      if (!Array.isArray(urls) || urls.length === 0) throw new AppError('INVALID_BODY', 400);
+      if (urls.length > BULK_MAX) throw new AppError('BULK_TOO_MANY', 400);
+      const pool = req.app.locals.pool;
+      const hosts = selfHosts(req);
+      const base = baseUrl(req);
+      const results = [];
+      for (let i = 0; i < urls.length; i++) {
+        try {
+          const link = await createLink(pool, { url: urls[i], userId: req.user.id, selfHosts: hosts });
+          results.push({ index: i, ok: true, link: { ...link, shortUrl: `${base}/${link.slug}` } });
+        } catch (err) {
+          const code = err instanceof AppError ? err.code : 'INTERNAL_ERROR';
+          if (!(err instanceof AppError)) console.error(err);
+          results.push({ index: i, ok: false, error: code });
+        }
+      }
+      res.json({ results, created: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length });
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.get('/:slug/stats', requireUser, async (req, res, next) => {
+    try {
+      const { slug } = req.params;
+      if (!SLUG_RE.test(slug)) throw new AppError('NOT_FOUND', 404);
+      const clicks = req.app.locals.clicks;
+      if (clicks) await clicks.flush();
+      const pool = req.app.locals.pool;
+      const link = await getLink(pool, slug);
+      if (!link || link.userId == null || String(link.userId) !== String(req.user.id)) {
+        throw new AppError('NOT_FOUND', 404);
+      }
+      const id = (await pool.query('SELECT id FROM links WHERE slug = $1', [slug])).rows[0].id;
+      const dayMs = 24 * 3600 * 1000;
+      const today = Math.floor(Date.now() / dayMs) * dayMs; // 00:00 UTC hôm nay
+      const from = new Date(today - 29 * dayMs);
+      const days = new Map();
+      for (let i = 0; i < 30; i++) days.set(new Date(from.getTime() + i * dayMs).toISOString().slice(0, 10), 0);
+      const times = (await pool.query('SELECT clicked_at FROM link_clicks WHERE link_id = $1 AND clicked_at >= $2', [id, from])).rows;
+      for (const t of times) {
+        const k = new Date(t.clicked_at).toISOString().slice(0, 10);
+        if (days.has(k)) days.set(k, days.get(k) + 1);
+      }
+      const byDay = [...days].map(([date, count]) => ({ date, count }));
+      const group = async (col, limit) => {
+        const rows = (await pool.query(
+          `SELECT ${col} AS k, COUNT(*) AS c FROM link_clicks WHERE link_id = $1 GROUP BY ${col} ORDER BY c DESC, k ASC${limit ? ` LIMIT ${limit}` : ''}`, [id])).rows;
+        return rows.map((r) => ({ [col === 'referrer_host' ? 'referrer' : col]: r.k === null ? 'direct' : r.k, count: Number(r.c) }));
+      };
+      res.json({
+        total: link.clicks,
+        last7days: byDay.slice(-7).reduce((a, d) => a + d.count, 0),
+        byDay,
+        byReferrer: await group('referrer_host', 10),
+        byDevice: await group('device'),
+        byBrowser: await group('browser'),
+      });
     } catch (err) {
       next(err);
     }
