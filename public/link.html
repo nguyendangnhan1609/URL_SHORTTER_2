@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title data-i18n="detail.title">Link details</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}</style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+<div id="site-header"></div>
+<section class="bg-gradient-to-br from-indigo-600 via-violet-600 to-cyan-500 text-white">
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <a href="/dashboard" class="text-sm text-white/80 hover:text-white" data-i18n="detail.back">Back to dashboard</a>
+    <div class="mt-2 flex flex-wrap items-center gap-3">
+      <h1 id="h-slug" class="text-3xl font-extrabold break-all"></h1>
+      <span id="h-badge"></span>
+    </div>
+    <p id="h-short" class="text-white/80 text-sm mt-1 break-all"></p>
+    <div id="actions" class="mt-4 flex flex-wrap gap-2"></div>
+  </div>
+</section>
+{{AD_TOP}}
+<main class="flex-1 w-full max-w-6xl mx-auto px-4 py-6">
+  <p id="error" class="text-red-600 text-sm mb-3 hidden" role="alert"></p>
+  <div class="grid gap-6 lg:grid-cols-3">
+    <section id="info" class="lg:col-span-2 bg-white rounded-3xl shadow p-6" aria-labelledby="info-h">
+      <h2 id="info-h" class="text-lg font-extrabold mb-3" data-i18n="detail.info">Information</h2>
+      <dl id="info-list" class="grid sm:grid-cols-[10rem_1fr] gap-y-2 gap-x-4 text-sm"></dl>
+    </section>
+    <section id="qr-card" class="bg-white rounded-3xl shadow p-6" aria-labelledby="qr-h">
+      <h2 id="qr-h" class="text-lg font-extrabold mb-3" data-i18n="qr.title">QR code</h2>
+      <div id="qr-host"></div>
+    </section>
+  </div>
+
+  <section id="totals" class="grid grid-cols-2 gap-4 mt-6" aria-label="totals">
+    <div class="bg-white rounded-3xl shadow p-5"><p class="text-sm text-slate-500" data-i18n="detail.total">Total clicks</p><p id="s-total" class="text-3xl font-extrabold tabular-nums mt-1">–</p></div>
+    <div class="bg-white rounded-3xl shadow p-5"><p class="text-sm text-slate-500" data-i18n="detail.last7">Last 7 days</p><p id="s-7" class="text-3xl font-extrabold tabular-nums mt-1">–</p></div>
+  </section>
+
+  <section id="chart-card" class="bg-white rounded-3xl shadow p-6 mt-6" aria-labelledby="chart-h">
+    <h2 id="chart-h" class="text-lg font-extrabold mb-3" data-i18n="detail.chart">Clicks in the last 30 days</h2>
+    <div class="relative">
+      <div id="chart"></div>
+      <div id="tip" class="pointer-events-none absolute hidden px-2 py-1 rounded-lg bg-slate-900 text-white text-xs whitespace-nowrap" role="status"></div>
+    </div>
+  </section>
+
+  <div class="grid gap-6 md:grid-cols-3 mt-6">
+    <section class="bg-white rounded-3xl shadow p-6" aria-labelledby="ref-h" data-section="referrer">
+      <h2 id="ref-h" class="text-lg font-extrabold mb-3" data-i18n="detail.referrers">Top referrers</h2><div id="bars-ref"></div></section>
+    <section class="bg-white rounded-3xl shadow p-6" aria-labelledby="dev-h" data-section="device">
+      <h2 id="dev-h" class="text-lg font-extrabold mb-3" data-i18n="detail.devices">Devices</h2><div id="bars-dev"></div></section>
+    <section class="bg-white rounded-3xl shadow p-6" aria-labelledby="br-h" data-section="browser">
+      <h2 id="br-h" class="text-lg font-extrabold mb-3" data-i18n="detail.browsers">Browsers</h2><div id="bars-br"></div></section>
+  </div>
+</main>
+{{AD_BOTTOM}}
+<div id="site-footer"></div>
+<script src="/i18n.js"></script>
+<script src="/layout.js"></script>
+<script src="/qrcode-generator.js"></script>
+<script src="/qr.js"></script>
+<script src="/linkui.js"></script>
+<script>
+(function () {
+  var L = window.LinkUI, el = L.el, $ = function (id) { return document.getElementById(id); };
+  var SLUG = decodeURIComponent(location.pathname.replace(/\/+$/, '').split('/').pop());
+  var link = null, stats = null, lastCode = null;
+  var NS = 'http://www.w3.org/2000/svg';
+
+  function statusOf(l) {
+    if (l.isActive === false) return 'disabled';
+    if (l.expiresAt && new Date(l.expiresAt).getTime() <= Date.now()) return 'expired';
+    if (l.maxClicks != null && l.clicks >= l.maxClicks) return 'expired';
+    return 'active';
+  }
+  function showErr(code) { lastCode = code; $('error').textContent = App.errText(code); $('error').classList.remove('hidden'); }
+  var fmtDate = function (v) { return v ? new Date(v).toLocaleString(I18N.getLang()) : null; };
+
+  function row(dl, key, node) {
+    var dt = L.i18nEl('dt', 'text-slate-500', key), dd = el('dd', 'break-all');
+    if (typeof node === 'string') dd.textContent = node; else dd.appendChild(node);
+    dl.appendChild(dt); dl.appendChild(dd);
+  }
+  function renderInfo() {
+    $('h-slug').textContent = '/' + link.slug;
+    $('h-short').textContent = link.shortUrl;
+    $('h-badge').textContent = ''; $('h-badge').appendChild(L.badge(link.status));
+    var dl = $('info-list'); dl.textContent = '';
+    var a = el('a', 'text-indigo-600 hover:underline', link.url); a.href = link.url; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow';
+    row(dl, 'create.url', a);
+    row(dl, 'edit.titleField', link.title || '–');
+    row(dl, 'edit.note', link.note || '–');
+    row(dl, 'dashboard.colCreated', fmtDate(link.createdAt) || '–');
+    row(dl, 'create.expiresAt', fmtDate(link.expiresAt) || '–');
+    row(dl, 'create.maxClicks', link.maxClicks == null ? '–' : String(link.maxClicks));
+    var host = $('qr-host'); host.textContent = '';
+    host.appendChild(L.qrBlock(link, 320));
+    renderActions();
+  }
+  function renderActions() {
+    var box = $('actions'); box.textContent = '';
+    var W = 'px-4 py-2 rounded-xl text-sm font-semibold bg-white/20 hover:bg-white/30 transition';
+    function b(key, cls, fn) { var x = L.i18nEl('button', cls, key); x.type = 'button'; x.addEventListener('click', function () { fn(x); }); box.appendChild(x); return x; }
+    b('common.copy', W, function (x) { App.copy(link.shortUrl, x); });
+    b('common.edit', W, function () { L.editModal(link, function () { init(); }); });
+    var tg = b(link.isActive === false ? 'detail.enable' : 'detail.disable', W, async function () {
+      tg.disabled = true;
+      try { await L.toggleActive(link); await init(); }
+      catch (e) { if (e.code === 'UNAUTHORIZED') { location.href = '/login'; return; } showErr(e.code); tg.disabled = false; }
+    });
+    b('common.delete', 'px-4 py-2 rounded-xl text-sm font-semibold bg-rose-500 hover:bg-rose-600 transition', function () {
+      L.deleteModal(link, function () { location.href = '/dashboard'; });
+    });
+  }
+
+  function svg(tag, attrs) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function renderChart() {
+    var host = $('chart'); host.textContent = '';
+    var data = stats.byDay, W = 720, H = 260, ml = 40, mb = 30, mt = 10, mr = 8;
+    var max = Math.max(1, Math.max.apply(null, data.map(function (d) { return d.count; })));
+    var step = Math.ceil(max / 4), top = step * 4; // 4 khoảng nguyên trên trục Y
+    var iw = W - ml - mr, ih = H - mt - mb, bw = iw / data.length;
+    var s = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'w-full h-auto', role: 'img', id: 'chart-svg' });
+    s.setAttribute('aria-label', I18N.t('detail.chartAria', { total: data.reduce(function (a, d) { return a + d.count; }, 0) }));
+    for (var i = 0; i <= 4; i++) {
+      var y = mt + ih - (ih * i) / 4;
+      s.appendChild(svg('line', { x1: ml, x2: W - mr, y1: y, y2: y, stroke: '#e2e8f0', 'stroke-width': 1 }));
+      var tx = svg('text', { x: ml - 6, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#64748b' });
+      tx.textContent = String(step * i); s.appendChild(tx);
+    }
+    var defs = svg('defs', {}), g = svg('linearGradient', { id: 'barg', x1: 0, y1: 0, x2: 0, y2: 1 });
+    g.appendChild(svg('stop', { offset: '0%', 'stop-color': '#7c3aed' })); g.appendChild(svg('stop', { offset: '100%', 'stop-color': '#06b6d4' }));
+    defs.appendChild(g); s.appendChild(defs);
+    var tip = $('tip');
+    data.forEach(function (d, idx) {
+      var h = (ih * d.count) / top, x = ml + idx * bw + 2, y2 = mt + ih - h;
+      var label = d.date + ': ' + I18N.t('detail.clicksN', { n: d.count });
+      var r = svg('rect', { x: x, y: d.count ? y2 : mt + ih - 1, width: Math.max(1, bw - 4), height: d.count ? h : 1, rx: 3,
+        fill: d.count ? 'url(#barg)' : '#cbd5e1', tabindex: 0, 'aria-label': label, 'data-date': d.date, 'data-count': d.count });
+      var tt = svg('title', {}); tt.textContent = label; r.appendChild(tt);
+      function show() {
+        tip.textContent = label; tip.classList.remove('hidden');
+        tip.style.left = Math.min(90, Math.max(0, ((x + bw / 2) / W) * 100)) + '%';
+        tip.style.top = '0'; tip.style.transform = 'translateX(-50%)';
+      }
+      function hide() { tip.classList.add('hidden'); }
+      r.addEventListener('mouseenter', show); r.addEventListener('focus', show);
+      r.addEventListener('mouseleave', hide); r.addEventListener('blur', hide);
+      s.appendChild(r);
+      if (idx % 5 === 0 || idx === data.length - 1) {
+        var lx = svg('text', { x: x + (bw - 4) / 2, y: H - 10, 'text-anchor': 'middle', 'font-size': 11, fill: '#64748b' });
+        lx.textContent = d.date.slice(5); s.appendChild(lx);
+      }
+    });
+    host.appendChild(s);
+  }
+
+  function labelFor(kind, v) {
+    if (v == null || v === 'direct') return kind === 'referrer' ? I18N.t('detail.direct') : v;
+    var key = kind + '.' + v;
+    var tr = I18N.t(key);
+    return tr === key ? v : tr;
+  }
+  function bars(hostId, list, kind) {
+    var host = $(hostId); host.textContent = '';
+    if (!list.length) { host.appendChild(L.i18nEl('p', 'text-sm text-slate-500', 'detail.noData')); return; }
+    var max = Math.max.apply(null, list.map(function (x) { return x.count; })), sum = list.reduce(function (a, x) { return a + x.count; }, 0);
+    var ul = el('ul', 'space-y-3');
+    list.forEach(function (x) {
+      var li = el('li'), top = el('div', 'flex justify-between gap-2 text-sm');
+      top.appendChild(el('span', 'truncate', labelFor(kind, x[kind])));
+      top.appendChild(el('span', 'tabular-nums text-slate-500', x.count + ' (' + Math.round((x.count * 100) / sum) + '%)'));
+      var track = el('div', 'h-2.5 rounded-full bg-slate-100 mt-1 overflow-hidden');
+      var fill = el('div', 'h-full rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-cyan-500');
+      fill.style.width = Math.max(2, (x.count * 100) / max) + '%';
+      fill.setAttribute('role', 'presentation');
+      track.appendChild(fill); li.appendChild(top); li.appendChild(track); ul.appendChild(li);
+    });
+    host.appendChild(ul);
+  }
+  function renderStats() {
+    $('s-total').textContent = Number(stats.total).toLocaleString(I18N.getLang());
+    $('s-7').textContent = Number(stats.last7days).toLocaleString(I18N.getLang());
+    renderChart();
+    bars('bars-ref', stats.byReferrer, 'referrer');
+    bars('bars-dev', stats.byDevice, 'device');
+    bars('bars-br', stats.byBrowser, 'browser');
+  }
+
+  async function init() {
+    $('error').classList.add('hidden'); lastCode = null;
+    try {
+      var r = await Promise.all([App.api('/api/links/' + encodeURIComponent(SLUG)), App.api('/api/links/' + encodeURIComponent(SLUG) + '/stats')]);
+      link = r[0]; link.status = link.status || statusOf(link); stats = r[1];
+      renderInfo(); renderStats();
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') { location.href = '/login'; return; }
+      showErr(err.code);
+    }
+  }
+  I18N.onChange(function () {
+    if (lastCode) $('error').textContent = App.errText(lastCode);
+    if (link) { renderInfo(); }
+    if (stats) renderStats();
+  });
+  I18N.ready.then(init);
+})();
+</script>
+</body>
+</html>

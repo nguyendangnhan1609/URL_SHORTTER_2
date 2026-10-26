@@ -5,105 +5,224 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-i18n="dashboard.title">Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}</style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
-<header class="bg-white border-b">
-  <nav class="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center gap-4">
-    <span class="font-bold" data-i18n="app.name">URL Shortener</span>
-    <a href="/" class="text-slate-600 hover:text-blue-600" data-i18n="nav.create">Create</a>
-    <a href="/dashboard" class="text-blue-600 font-semibold" data-i18n="nav.dashboard">Dashboard</a>
-    <span id="auth-nav" class="ml-auto flex gap-3 text-sm"></span>
-    <label class="text-sm"><span class="sr-only" data-i18n="nav.language">Language</span>
-      <select id="lang-select" class="border rounded px-2 py-1"></select></label>
-  </nav>
-</header>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+<div id="site-header"></div>
+<section class="bg-gradient-to-br from-indigo-600 via-violet-600 to-cyan-500 text-white">
+  <div class="max-w-6xl mx-auto px-4 py-8 flex flex-wrap items-center gap-4">
+    <div>
+      <h1 class="text-3xl font-extrabold" data-i18n="dashboard.heading">Links</h1>
+      <p class="text-white/80 text-sm mt-1" data-i18n="dashboard.subtitle">Manage, edit and track your links.</p>
+    </div>
+    <div class="ml-auto flex flex-wrap gap-2">
+      <button id="bulk-open" type="button" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white/20 hover:bg-white/30 transition" data-i18n="bulk.open">Bulk shorten</button>
+      <a href="/" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white text-indigo-700 hover:bg-indigo-50 transition" data-i18n="dashboard.newLink">New link</a>
+    </div>
+  </div>
+</section>
 {{AD_TOP}}
-<main class="max-w-4xl mx-auto px-4 py-6">
-<h1 class="text-2xl font-bold mb-4" data-i18n="dashboard.heading">Links</h1>
-<p id="error" class="text-red-600 text-sm mb-2 hidden" role="alert"></p>
-<div class="bg-white rounded shadow overflow-x-auto">
-  <table class="min-w-full text-sm">
-    <thead class="bg-slate-100 text-left">
-      <tr>
-        <th class="px-3 py-2" data-i18n="dashboard.colShort">Short link</th>
-        <th class="px-3 py-2" data-i18n="dashboard.colUrl">Original URL</th>
-        <th class="px-3 py-2" data-i18n="dashboard.colClicks">Clicks</th>
-        <th class="px-3 py-2 whitespace-nowrap" data-i18n="dashboard.colCreated">Created</th>
-      </tr>
-    </thead>
-    <tbody id="rows"></tbody>
-  </table>
-</div>
-<div class="flex items-center justify-between mt-4">
-  <button id="prev" type="button" class="border rounded px-3 py-1 bg-white disabled:opacity-50" data-i18n="dashboard.prev">Previous</button>
-  <span id="pageinfo" class="text-sm"></span>
-  <button id="next" type="button" class="border rounded px-3 py-1 bg-white disabled:opacity-50" data-i18n="dashboard.next">Next</button>
-</div>
+<main class="flex-1 w-full max-w-6xl mx-auto px-4 py-6">
+  <div class="grid grid-cols-2 gap-4 -mt-12 mb-6">
+    <div class="bg-white rounded-3xl shadow-lg p-5" data-card="links">
+      <p class="text-sm text-slate-500" data-i18n="dashboard.totalLinks">Total links</p>
+      <p id="sum-links" class="text-3xl font-extrabold tabular-nums mt-1">–</p>
+    </div>
+    <div class="bg-white rounded-3xl shadow-lg p-5" data-card="clicks">
+      <p class="text-sm text-slate-500" data-i18n="dashboard.totalClicks">Total clicks</p>
+      <p id="sum-clicks" class="text-3xl font-extrabold tabular-nums mt-1">–</p>
+    </div>
+  </div>
+
+  <form id="filters" class="flex flex-wrap gap-3 mb-4" role="search" novalidate>
+    <label class="flex-1 min-w-[12rem]"><span class="sr-only" data-i18n="dashboard.search">Search</span>
+      <input id="q" type="search" maxlength="200" data-i18n-placeholder="dashboard.searchPlaceholder" placeholder="Search" class="w-full border border-slate-200 rounded-2xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"></label>
+    <label><span class="sr-only" data-i18n="dashboard.status">Status</span>
+      <select id="status" class="border border-slate-200 rounded-2xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+        <option value="" data-i18n="status.all">All</option>
+        <option value="active" data-i18n="status.active">Active</option>
+        <option value="disabled" data-i18n="status.disabled">Disabled</option>
+        <option value="expired" data-i18n="status.expired">Expired</option>
+      </select></label>
+  </form>
+
+  <p id="error" class="text-red-600 text-sm mb-2 hidden" role="alert"></p>
+  <div class="bg-white rounded-3xl shadow overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left text-slate-600">
+        <tr>
+          <th scope="col" class="px-4 py-3" data-i18n="dashboard.colShort">Short link</th>
+          <th scope="col" class="px-4 py-3 hidden md:table-cell" data-i18n="dashboard.colUrl">Original URL</th>
+          <th scope="col" class="px-4 py-3" data-i18n="dashboard.colClicks">Clicks</th>
+          <th scope="col" class="px-4 py-3 hidden sm:table-cell whitespace-nowrap" data-i18n="dashboard.colCreated">Created</th>
+          <th scope="col" class="px-4 py-3" data-i18n="dashboard.status">Status</th>
+          <th scope="col" class="px-4 py-3" data-i18n="dashboard.colActions">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="flex items-center justify-between mt-4">
+    <button id="prev" type="button" class="px-4 py-2 rounded-xl bg-white border border-slate-200 font-semibold disabled:opacity-50" data-i18n="dashboard.prev">Previous</button>
+    <span id="pageinfo" class="text-sm text-slate-600"></span>
+    <button id="next" type="button" class="px-4 py-2 rounded-xl bg-white border border-slate-200 font-semibold disabled:opacity-50" data-i18n="dashboard.next">Next</button>
+  </div>
 </main>
 {{AD_BOTTOM}}
+<div id="site-footer"></div>
 <script src="/i18n.js"></script>
 <script src="/layout.js"></script>
+<script src="/qrcode-generator.js"></script>
+<script src="/qr.js"></script>
+<script src="/linkui.js"></script>
 <script>
 (function () {
-  var page = 1, totalPages = 1, lastCode = null, state = 'loading';
+  var L = window.LinkUI, el = L.el;
+  var page = 1, totalPages = 1, items = [], lastCode = null, state = 'loading';
   var rows = document.getElementById('rows'), errEl = document.getElementById('error');
   var prev = document.getElementById('prev'), next = document.getElementById('next'), info = document.getElementById('pageinfo');
+  var qEl = document.getElementById('q'), statusEl = document.getElementById('status');
+  var BTN = 'px-2.5 py-1 rounded-lg text-xs font-semibold ';
+  var SOFT = BTN + 'bg-slate-100 text-slate-700 hover:bg-slate-200';
 
   function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
-  function cell(tr, cls) { var td = document.createElement('td'); td.className = 'px-3 py-2 ' + cls; tr.appendChild(td); return td; }
-
+  function cell(tr, cls) { var td = el('td', 'px-4 py-3 ' + cls); tr.appendChild(td); return td; }
   function pager() {
     info.textContent = I18N.t('dashboard.pageInfo', { page: page, total: Math.max(totalPages, 1) });
     prev.disabled = page <= 1; next.disabled = page >= totalPages;
   }
   function message(key) {
     rows.textContent = '';
-    var tr = document.createElement('tr'), td = cell(tr, 'text-slate-500');
-    td.colSpan = 4; td.textContent = I18N.t(key); rows.appendChild(tr);
+    var tr = el('tr'), td = cell(tr, 'text-slate-500 text-center py-10');
+    td.colSpan = 6; td.setAttribute('data-i18n', key); td.textContent = I18N.t(key); rows.appendChild(tr);
   }
-  function render(items) {
+  function btn(key, cls, fn) {
+    var b = L.i18nEl('button', cls, key); b.type = 'button'; b.addEventListener('click', function () { fn(b); }); return b;
+  }
+  function render() {
     rows.textContent = '';
-    if (!items.length) { state = 'empty'; return message('dashboard.empty'); }
+    if (!items.length) { state = 'empty'; return message(qEl.value || statusEl.value ? 'dashboard.noResults' : 'dashboard.empty'); }
     state = 'data';
     items.forEach(function (it) {
-      var tr = document.createElement('tr'); tr.className = 'border-t';
+      var tr = el('tr', 'border-t border-slate-100 hover:bg-slate-50 align-top');
       var c1 = cell(tr, 'whitespace-nowrap');
-      var a = document.createElement('a');
-      a.href = it.shortUrl; a.textContent = '/' + it.slug; a.target = '_blank'; a.rel = 'noopener';
-      a.className = 'text-blue-600 mr-2';
-      var b = document.createElement('button');
-      b.type = 'button'; b.className = 'border rounded px-2 py-0.5 text-xs';
-      b.setAttribute('data-i18n', 'common.copy'); b.textContent = I18N.t('common.copy');
-      b.addEventListener('click', function () { App.copy(it.shortUrl, b); });
-      c1.appendChild(a); c1.appendChild(b);
-      var c2 = cell(tr, 'break-all max-w-xs');
+      var a = el('a', 'text-indigo-600 font-semibold hover:underline', '/' + it.slug);
+      a.href = it.shortUrl; a.target = '_blank'; a.rel = 'noopener';
+      c1.appendChild(a);
+      if (it.title) c1.appendChild(el('div', 'text-xs text-slate-500 max-w-[14rem] truncate', it.title));
+      var c2 = cell(tr, 'break-all max-w-xs hidden md:table-cell text-slate-600');
       c2.textContent = truncate(it.url, 60); c2.title = it.url;
       cell(tr, 'tabular-nums').textContent = String(it.clicks);
-      cell(tr, 'whitespace-nowrap').textContent = new Date(it.createdAt).toLocaleString(I18N.getLang());
+      cell(tr, 'whitespace-nowrap hidden sm:table-cell text-slate-600').textContent = new Date(it.createdAt).toLocaleDateString(I18N.getLang());
+      cell(tr, '').appendChild(L.badge(it.status));
+      var act = cell(tr, ''), box = el('div', 'flex flex-wrap gap-1.5 min-w-[11rem]');
+      box.appendChild(btn('common.copy', SOFT, function (b) { App.copy(it.shortUrl, b); }));
+      box.appendChild(btn('dashboard.qr', SOFT, function () { L.qrModal(it); }));
+      var d = L.i18nEl('a', SOFT, 'dashboard.details'); d.href = '/dashboard/links/' + encodeURIComponent(it.slug);
+      box.appendChild(d);
+      box.appendChild(btn('common.edit', SOFT, function () { L.editModal(it, load); }));
+      box.appendChild(btn('common.delete', BTN + 'bg-rose-50 text-rose-700 hover:bg-rose-100', function () {
+        L.deleteModal(it, function () { if (items.length === 1 && page > 1) page--; load(); });
+      }));
+      act.appendChild(box);
       rows.appendChild(tr);
     });
   }
+  function summary(s) {
+    if (!s) return;
+    document.getElementById('sum-links').textContent = Number(s.totalLinks).toLocaleString(I18N.getLang());
+    document.getElementById('sum-clicks').textContent = Number(s.totalClicks).toLocaleString(I18N.getLang());
+  }
+  var seq = 0;
   async function load() {
+    var mine = ++seq;
     errEl.classList.add('hidden'); lastCode = null;
-    state = 'loading'; message('dashboard.loading');
+    var qs = 'page=' + page + '&pageSize=20';
+    if (qEl.value.trim()) qs += '&q=' + encodeURIComponent(qEl.value.trim());
+    if (statusEl.value) qs += '&status=' + encodeURIComponent(statusEl.value);
     try {
-      var r = await App.api('/api/links?page=' + page + '&pageSize=20');
-      totalPages = r.totalPages; render(r.items);
+      var r = await App.api('/api/links?' + qs);
+      if (mine !== seq) return;
+      totalPages = r.totalPages; items = r.items; summary(r.summary); render();
     } catch (err) {
+      if (mine !== seq) return;
       if (err.code === 'UNAUTHORIZED') { location.href = '/login'; return; }
-      state = 'error'; lastCode = err.code; errEl.textContent = App.errText(err.code); errEl.classList.remove('hidden');
+      state = 'error'; lastCode = err.code; items = [];
+      errEl.textContent = App.errText(err.code); errEl.classList.remove('hidden');
       rows.textContent = '';
     }
     pager();
   }
+
+  // Rút gọn hàng loạt
+  function bulk() {
+    var m = L.modal('bulk.title', true);
+    var intro = L.i18nEl('p', 'text-sm text-slate-500 mb-2', 'bulk.hint');
+    var ta = el('textarea', L.INPUT + ' font-mono text-sm'); ta.rows = 8; ta.setAttribute('aria-label', I18N.t('bulk.title'));
+    ta.setAttribute('data-i18n-placeholder', 'bulk.placeholder'); ta.placeholder = I18N.t('bulk.placeholder');
+    var err = el('p', 'text-sm text-red-600 mt-2 hidden'); err.setAttribute("role", "alert");
+    var go = L.i18nEl('button', L.BTN_GRAD, 'bulk.submit'); go.type = 'button';
+    var bar = el('div', 'flex justify-end mt-3'); bar.appendChild(go);
+    var out = el('ul', 'mt-4 space-y-2');
+    out.setAttribute("aria-live", "polite");
+    var summaryEl = el('p', 'mt-4 text-sm font-semibold hidden');
+    m.body.appendChild(intro); m.body.appendChild(ta); m.body.appendChild(err); m.body.appendChild(bar);
+    m.body.appendChild(summaryEl); m.body.appendChild(out);
+    var code = null, done = null;
+    function showErr(c) { code = c; err.textContent = App.errText(c); err.classList.remove('hidden'); }
+    go.addEventListener('click', async function () {
+      err.classList.add('hidden'); code = null; out.textContent = ''; summaryEl.classList.add('hidden');
+      var urls = ta.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!urls.length) return showErr('INVALID_BODY');
+      if (urls.length > 50) return showErr('BULK_TOO_MANY');
+      go.disabled = true;
+      try {
+        var r = await App.api('/api/links/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: urls }) });
+        done = r;
+        r.results.forEach(function (res) {
+          var li = el('li', 'rounded-2xl px-3 py-2 text-sm flex flex-wrap items-center gap-2 ' + (res.ok ? 'bg-emerald-50' : 'bg-rose-50'));
+          li.setAttribute('data-ok', res.ok ? '1' : '0');
+          li.appendChild(el('span', 'text-slate-500 break-all flex-1 min-w-[10rem]', truncate(urls[res.index], 80)));
+          if (res.ok) {
+            var a = el('a', 'text-indigo-700 font-semibold', res.link.shortUrl); a.href = res.link.shortUrl; a.target = '_blank'; a.rel = 'noopener';
+            li.appendChild(a);
+            li.appendChild(btn('common.copy', SOFT, function (b) { App.copy(res.link.shortUrl, b); }));
+          } else {
+            var e = el('span', 'text-rose-700 font-medium', App.errText(res.error)); e.setAttribute('data-code', res.error);
+            li.appendChild(e);
+          }
+          out.appendChild(li);
+        });
+        summaryEl.textContent = I18N.t('bulk.summary', { ok: r.created, fail: r.failed });
+        summaryEl.classList.remove('hidden');
+        page = 1; load();
+      } catch (ex) {
+        if (ex.code === 'UNAUTHORIZED') { location.href = '/login'; return; }
+        showErr(ex.code);
+      }
+      go.disabled = false;
+    });
+    I18N.onChange(function () {
+      if (code) err.textContent = App.errText(code);
+      if (done) summaryEl.textContent = I18N.t('bulk.summary', { ok: done.created, fail: done.failed });
+    });
+    ta.focus();
+  }
+
   I18N.onChange(function () {
     if (lastCode) errEl.textContent = App.errText(lastCode);
-    if (state === 'loading') message('dashboard.loading'); else if (state === 'empty') message('dashboard.empty');
+    if (state === 'data') render();
     pager();
   });
+  var timer = null;
+  qEl.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { page = 1; load(); }, 300); });
+  statusEl.addEventListener('change', function () { page = 1; load(); });
+  document.getElementById('filters').addEventListener('submit', function (e) { e.preventDefault(); page = 1; load(); });
+  document.getElementById('bulk-open').addEventListener('click', bulk);
   prev.addEventListener('click', function () { if (page > 1) { page--; load(); } });
   next.addEventListener('click', function () { if (page < totalPages) { page++; load(); } });
-  I18N.ready.then(load);
+  state = 'loading'; message('dashboard.loading');
+  I18N.ready.then(function () { message('dashboard.loading'); load(); });
 })();
 </script>
 </body>
