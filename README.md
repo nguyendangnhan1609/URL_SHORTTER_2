@@ -41,3 +41,8 @@ Thêm ngôn ngữ: tạo `public/locales/<mã>.json` (đủ key như `en.json`, 
 Lưu ý: `docker-compose.yml` đặt `NODE_ENV=production`, nên cookie có cờ Secure và trình duyệt sẽ không gửi lại qua HTTP. Khi chạy thử qua `http://localhost` hãy đặt `COOKIE_SECURE=false` (ví dụ `COOKIE_SECURE=false docker compose up`); với HTTPS để mặc định.
 
 Khác: session hết hạn được xoá mỗi giờ và khi đăng nhập. `GET /api/links/:slug` của link thuộc người dùng chỉ trả về cho chủ sở hữu (người khác nhận 404); redirect `GET /:slug` vẫn công khai.
+
+## Quản lý link (API)
+- `PATCH /api/links/:slug` (đăng nhập, chỉ chủ link; người khác nhận 404): sửa `url`, `title`, `note`, `isActive`, `expiresAt`, `maxClicks`. `DELETE /api/links/:slug` xoá link.
+- `POST /api/links` nhận thêm `title`, `note`, `expiresAt`, `maxClicks`. `GET /api/links?q=&status=active|disabled|expired&page=&pageSize=`.
+- Link tắt / hết hạn / hết lượt click trả 410 (không redirect, không đếm click). `GET /preview/:slug` hiển thị URL đích trước khi đi. URL đích trỏ về chính domain dịch vụ (Host hoặc `BASE_URL`) bị từ chối với `SELF_REFERENCE`.

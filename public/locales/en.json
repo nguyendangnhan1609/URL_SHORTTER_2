@@ -60,5 +60,20 @@
   "error.TOO_MANY_ATTEMPTS": "Too many failed attempts, please try again in 15 minutes.",
   "error.UNAUTHORIZED": "Please log in first.",
   "error.CSRF": "Request rejected (missing CSRF header).",
-  "error.RATE_LIMITED": "Too many links created, please try again later."
+  "error.RATE_LIMITED": "Too many links created, please try again later.",
+  "gone.title": "410 Link unavailable",
+  "gone.body": "This link is disabled, expired or has reached its click limit.",
+  "preview.title": "Link preview",
+  "preview.heading": "Link preview",
+  "preview.destination": "This short link leads to:",
+  "preview.warning": "Only continue if you trust this address.",
+  "preview.continue": "Continue",
+  "error.SELF_REFERENCE": "The destination URL cannot point to this service.",
+  "error.INVALID_TITLE": "Invalid title (up to 100 characters).",
+  "error.INVALID_NOTE": "Invalid note (up to 500 characters).",
+  "error.INVALID_EXPIRES": "Invalid expiry date (must be a valid date in the future).",
+  "error.INVALID_MAX_CLICKS": "Invalid click limit (integer from 1 to 1,000,000,000).",
+  "error.INVALID_QUERY": "Invalid search query.",
+  "error.INVALID_STATUS": "Invalid status filter (active, disabled or expired).",
+  "error.GONE": "This link is disabled or expired."
 }
