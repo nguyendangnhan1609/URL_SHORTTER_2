@@ -3,7 +3,7 @@ const { newDb } = require('pg-mem');
 const { migrate } = require('../src/db');
 const { createApp } = require('../src/app');
 
-let pool, app;
+let pool, app, agent;
 const slugs = [];
 
 beforeAll(async () => {
@@ -11,8 +11,10 @@ beforeAll(async () => {
   pool = new Pool();
   await migrate(pool);
   app = createApp({ pool });
+  agent = request.agent(app);
+  await agent.post('/api/auth/register').set('X-Requested-With', 'test').send({ email: 'list@example.com', password: 'password123' }).expect(201);
   for (let i = 0; i < 45; i++) {
-    const r = await request(app).post('/api/links').send({ url: `https://example.com/${i}`, slug: `link-${String(i).padStart(2, '0')}` });
+    const r = await agent.set('X-Requested-With', 'test').post('/api/links').send({ url: `https://example.com/${i}`, slug: `link-${String(i).padStart(2, '0')}` });
     slugs.push(r.body.slug);
   }
 });
@@ -21,7 +23,8 @@ afterAll(async () => {
   await pool.end();
 });
 
-const list = (q = '') => request(app).get(`/api/links${q}`);
+// T7: dashboard chỉ trả link của user đăng nhập nên dùng agent có cookie phiên.
+const list = (q = '') => agent.get(`/api/links${q}`);
 
 test('pagination 45 links: 20/20/5', async () => {
   const p1 = (await list('?page=1&pageSize=20')).body;

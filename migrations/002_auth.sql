@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS users (
+  id BIGSERIAL PRIMARY KEY,
+  email VARCHAR(254) NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  id CHAR(64) PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
+ALTER TABLE links ADD COLUMN user_id BIGINT REFERENCES users (id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_links_user ON links (user_id, created_at DESC);

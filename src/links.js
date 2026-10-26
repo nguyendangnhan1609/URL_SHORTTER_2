@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const RESERVED = new Set([
   'api', 'admin', 'dashboard', 'healthz', 'static', 'public', 'locales',
   'assets', 'favicon.ico', 'robots.txt', 'create', 'links',
+  'login', 'register', 'logout', 'me', 'profile', 'preview',
 ]);
 const SLUG_RE = /^[a-zA-Z0-9_-]{3,32}$/;
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -47,10 +48,10 @@ function validateSlug(slug) {
 
 const isUnique = (err) => err && err.code === '23505';
 
-async function insert(pool, slug, url) {
+async function insert(pool, slug, url, userId) {
   const r = await pool.query(
-    'INSERT INTO links (slug, target_url) VALUES ($1, $2) RETURNING slug, target_url, clicks, created_at',
-    [slug, url]
+    'INSERT INTO links (slug, target_url, user_id) VALUES ($1, $2, $3) RETURNING slug, target_url, clicks, created_at',
+    [slug, url, userId || null]
   );
   const row = r.rows[0];
   return {
@@ -61,12 +62,12 @@ async function insert(pool, slug, url) {
   };
 }
 
-async function createLink(pool, { url, slug } = {}) {
+async function createLink(pool, { url, slug, userId } = {}) {
   url = validateUrl(url);
   if (slug !== undefined && slug !== null && slug !== '') {
     validateSlug(slug);
     try {
-      return await insert(pool, slug, url);
+      return await insert(pool, slug, url, userId);
     } catch (err) {
       if (isUnique(err)) throw new LinkError('SLUG_TAKEN', 409);
       throw err;
@@ -76,7 +77,7 @@ async function createLink(pool, { url, slug } = {}) {
     const candidate = generateSlug();
     if (RESERVED.has(candidate.toLowerCase())) continue;
     try {
-      return await insert(pool, candidate, url);
+      return await insert(pool, candidate, url, userId);
     } catch (err) {
       if (!isUnique(err)) throw err;
     }

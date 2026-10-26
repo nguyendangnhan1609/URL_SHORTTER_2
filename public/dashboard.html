@@ -12,7 +12,8 @@
     <span class="font-bold" data-i18n="app.name">URL Shortener</span>
     <a href="/" class="text-slate-600 hover:text-blue-600" data-i18n="nav.create">Create</a>
     <a href="/dashboard" class="text-blue-600 font-semibold" data-i18n="nav.dashboard">Dashboard</a>
-    <label class="ml-auto text-sm"><span class="sr-only" data-i18n="nav.language">Language</span>
+    <span id="auth-nav" class="ml-auto flex gap-3 text-sm"></span>
+    <label class="text-sm"><span class="sr-only" data-i18n="nav.language">Language</span>
       <select id="lang-select" class="border rounded px-2 py-1"></select></label>
   </nav>
 </header>
@@ -89,6 +90,7 @@
       var r = await App.api('/api/links?page=' + page + '&pageSize=20');
       totalPages = r.totalPages; render(r.items);
     } catch (err) {
+      if (err.code === 'UNAUTHORIZED') { location.href = '/login'; return; }
       state = 'error'; lastCode = err.code; errEl.textContent = App.errText(err.code); errEl.classList.remove('hidden');
       rows.textContent = '';
     }

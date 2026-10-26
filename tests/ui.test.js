@@ -103,7 +103,7 @@ describe('locales', () => {
   });
   test('every data-i18n key used in html exists', () => {
     const keys = Object.keys(loc('en'));
-    for (const f of ['index.html', 'dashboard.html']) {
+    for (const f of ['index.html', 'dashboard.html', 'login.html', 'register.html']) {
       const html = fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8');
       for (const m of html.matchAll(/data-i18n(?:-placeholder)?="([^"]+)"/g)) expect(keys).toContain(m[1]);
     }
