@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireUser } = require('../auth');
-const { createLink, getLink, SLUG_RE, LinkError } = require('../links');
+const { createLink, getLink, SLUG_RE, AppError } = require('../links');
 
 function baseUrl(req) {
   const configured = process.env.BASE_URL;
@@ -15,7 +15,7 @@ function linksRouter() {
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       if (!req.user) {
         const lim = req.app.locals.guestLimiter;
-        if (lim.blocked(req.ip)) throw new LinkError('RATE_LIMITED', 429);
+        if (lim.blocked(req.ip)) throw new AppError('RATE_LIMITED', 429);
         lim.hit(req.ip);
       }
       const link = await createLink(req.app.locals.pool, {
@@ -30,9 +30,9 @@ function linksRouter() {
     try {
       const parse = (v, def, max) => {
         if (v === undefined) return def;
-        if (typeof v !== 'string' || !/^\d+$/.test(v)) throw new LinkError('INVALID_PAGINATION', 400);
+        if (typeof v !== 'string' || !/^\d+$/.test(v)) throw new AppError('INVALID_PAGINATION', 400);
         const n = Number(v);
-        if (!Number.isSafeInteger(n) || n < 1 || (max && n > max)) throw new LinkError('INVALID_PAGINATION', 400);
+        if (!Number.isSafeInteger(n) || n < 1 || (max && n > max)) throw new AppError('INVALID_PAGINATION', 400);
         return n;
       };
       const page = parse(req.query.page, 1);
@@ -66,12 +66,17 @@ function linksRouter() {
   router.get('/:slug', async (req, res, next) => {
     try {
       const { slug } = req.params;
-      if (!SLUG_RE.test(slug)) throw new LinkError('NOT_FOUND', 404);
+      if (!SLUG_RE.test(slug)) throw new AppError('NOT_FOUND', 404);
       const clicks = req.app.locals.clicks;
       if (clicks) await clicks.flush();
       const link = await getLink(req.app.locals.pool, slug);
-      if (!link) throw new LinkError('NOT_FOUND', 404);
-      res.json(link);
+      if (!link) throw new AppError('NOT_FOUND', 404);
+      const { userId, ...pub } = link;
+      // Link của người dùng chỉ chủ sở hữu xem được.
+      if (userId != null && !(req.user && String(req.user.id) === String(userId))) {
+        throw new AppError('NOT_FOUND', 404);
+      }
+      res.json(pub);
     } catch (err) {
       next(err);
     }

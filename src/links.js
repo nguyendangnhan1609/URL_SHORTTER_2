@@ -10,7 +10,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 const MAX_URL = 2048;
 const MAX_ATTEMPTS = 5;
 
-class LinkError extends Error {
+class AppError extends Error {
   constructor(code, status) {
     super(code);
     this.code = code;
@@ -25,25 +25,25 @@ function generateSlug(len = 7) {
 }
 
 function validateUrl(url) {
-  if (typeof url !== 'string') throw new LinkError('INVALID_URL', 400);
+  if (typeof url !== 'string') throw new AppError('INVALID_URL', 400);
   const trimmed = url.trim();
-  if (trimmed.length === 0 || trimmed.length > MAX_URL) throw new LinkError('INVALID_URL', 400);
-  if (!/^https?:\/\//i.test(trimmed)) throw new LinkError('INVALID_URL', 400);
+  if (trimmed.length === 0 || trimmed.length > MAX_URL) throw new AppError('INVALID_URL', 400);
+  if (!/^https?:\/\//i.test(trimmed)) throw new AppError('INVALID_URL', 400);
   let u;
   try {
     u = new URL(trimmed);
   } catch {
-    throw new LinkError('INVALID_URL', 400);
+    throw new AppError('INVALID_URL', 400);
   }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new LinkError('INVALID_URL', 400);
-  if (u.username || u.password) throw new LinkError('INVALID_URL', 400);
-  if (u.href.length > MAX_URL) throw new LinkError('INVALID_URL', 400);
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new AppError('INVALID_URL', 400);
+  if (u.username || u.password) throw new AppError('INVALID_URL', 400);
+  if (u.href.length > MAX_URL) throw new AppError('INVALID_URL', 400);
   return u.href;
 }
 
 function validateSlug(slug) {
-  if (typeof slug !== 'string' || !SLUG_RE.test(slug)) throw new LinkError('INVALID_SLUG', 400);
-  if (RESERVED.has(slug.toLowerCase())) throw new LinkError('RESERVED_SLUG', 400);
+  if (typeof slug !== 'string' || !SLUG_RE.test(slug)) throw new AppError('INVALID_SLUG', 400);
+  if (RESERVED.has(slug.toLowerCase())) throw new AppError('RESERVED_SLUG', 400);
 }
 
 const isUnique = (err) => err && err.code === '23505';
@@ -69,7 +69,7 @@ async function createLink(pool, { url, slug, userId } = {}) {
     try {
       return await insert(pool, slug, url, userId);
     } catch (err) {
-      if (isUnique(err)) throw new LinkError('SLUG_TAKEN', 409);
+      if (isUnique(err)) throw new AppError('SLUG_TAKEN', 409);
       throw err;
     }
   }
@@ -82,12 +82,12 @@ async function createLink(pool, { url, slug, userId } = {}) {
       if (!isUnique(err)) throw err;
     }
   }
-  throw new LinkError('SLUG_GENERATION_FAILED', 500);
+  throw new AppError('SLUG_GENERATION_FAILED', 500);
 }
 
 async function getLink(pool, slug) {
   const r = await pool.query(
-    'SELECT slug, target_url, clicks, created_at FROM links WHERE slug = $1',
+    'SELECT slug, target_url, clicks, created_at, user_id FROM links WHERE slug = $1',
     [slug]
   );
   const row = r.rows[0];
@@ -97,7 +97,8 @@ async function getLink(pool, slug) {
     url: row.target_url,
     clicks: Number(row.clicks),
     createdAt: row.created_at,
+    userId: row.user_id,
   };
 }
 
-module.exports = { createLink, getLink, LinkError, generateSlug, RESERVED, SLUG_RE };
+module.exports = { createLink, getLink, AppError, generateSlug, RESERVED, SLUG_RE };

@@ -116,3 +116,45 @@ test('non-string / malformed auth bodies do not 500', async () => {
     expect((await request(app).post('/api/auth/register').send(b)).status).toBe(400);
   }
 });
+
+describe('rate limit hardening', () => {
+  const { createApp: mk } = require('../src/app');
+  test('parallel wrong logins: most get 429', async () => {
+    const a = mk({ pool });
+    await request(a).post('/api/auth/register').send(creds('par@example.com')).expect(201);
+    const rs = await Promise.all(Array.from({ length: 30 }, () =>
+      request(a).post('/api/auth/login').send(creds('par@example.com', 'wrongpass99'))));
+    const n429 = rs.filter((r) => r.status === 429).length;
+    expect(rs.filter((r) => r.status === 401).length).toBeLessThanOrEqual(5);
+    expect(n429).toBeGreaterThanOrEqual(25);
+    await a.locals.clicks.stop();
+  });
+  test('register limited per IP', async () => {
+    process.env.REGISTER_PER_HOUR = '10';
+    const a = mk({ pool });
+    process.env.REGISTER_PER_HOUR = '100000';
+    const codes = [];
+    for (let i = 0; i < 12; i++) {
+      codes.push((await request(a).post('/api/auth/register').send(creds(`rl${i}@example.com`))).status);
+    }
+    expect(codes.filter((c) => c === 429).length).toBe(2);
+    await a.locals.clicks.stop();
+  });
+  test("another user's link is 404 on GET /api/links/:slug but redirect is public", async () => {
+    const owner = await reg('own1@example.com');
+    const c = await owner.post('/api/links').set(XR).send({ url: 'https://example.com/x' }).expect(201);
+    await owner.get(`/api/links/${c.body.slug}`).expect(200);
+    await request(app).get(`/api/links/${c.body.slug}`).expect(404);
+    const other = await reg('oth1@example.com');
+    await other.get(`/api/links/${c.body.slug}`).expect(404);
+    await request(app).get(`/${c.body.slug}`).expect(302);
+  });
+  test('login purges expired sessions', async () => {
+    await request(app).post('/api/auth/register').send(creds('purge@example.com')).expect(201);
+    const uid = (await pool.query("SELECT id FROM users WHERE email = 'purge@example.com'")).rows[0].id;
+    await pool.query('INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)', ['dead1', uid, new Date(Date.now() - 1000)]);
+    await request(app).post('/api/auth/login').send(creds('purge@example.com')).expect(200);
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await pool.query("SELECT 1 FROM sessions WHERE id = 'dead1'")).rows.length).toBe(0);
+  });
+});

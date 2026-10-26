@@ -1,19 +1,22 @@
 const express = require('express');
 const path = require('path');
 const { linksRouter } = require('./routes/links');
-const { LinkError, SLUG_RE, getLink } = require('./links');
+const { AppError, SLUG_RE, getLink } = require('./links');
 const { LruCache } = require('./cache');
 const { createClickCounter } = require('./clicks');
-const { authRouter, loadUser, csrf, makeLoginLimiter } = require('./auth');
+const { authRouter, loadUser, csrf, makeLoginLimiter, startSessionCleanup } = require('./auth');
 const { RateLimiter } = require('./ratelimit');
 const { pagesRouter, pickLang, renderNotFound } = require('./pages');
 
 function createApp({ pool, cacheSize, adsEnabled, guestLinkLimit, loginLimiter } = {}) {
   const app = express();
+  const tp = process.env.TRUST_PROXY;
+  if (tp) app.set('trust proxy', /^\d+$/.test(tp) ? Number(tp) : tp === 'true' ? true : tp);
   app.locals.pool = pool;
   const cache = new LruCache(cacheSize || process.env.CACHE_SIZE || 10000);
   const clicks = createClickCounter(pool);
   app.locals.cache = cache;
+  app.locals.sessionCleanup = startSessionCleanup(pool);
   app.locals.clicks = clicks;
   app.use(express.json({ limit: '10kb' }));
   app.get('/healthz', (req, res) => res.json({ ok: true }));
@@ -52,7 +55,7 @@ function createApp({ pool, cacheSize, adsEnabled, guestLinkLimit, loginLimiter }
   });
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
-    if (err instanceof LinkError) return res.status(err.status).json({ error: err.code });
+    if (err instanceof AppError) return res.status(err.status).json({ error: err.code });
     if (err.type === 'entity.parse.failed') {
       return res.status(400).json({ error: 'INVALID_BODY' });
     }

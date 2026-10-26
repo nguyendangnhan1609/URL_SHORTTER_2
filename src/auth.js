@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const express = require('express');
-const { LinkError } = require('./links');
+const { AppError } = require('./links');
 const { RateLimiter } = require('./ratelimit');
 
 const COOKIE = 'sid';
@@ -33,14 +33,14 @@ function parseCookie(header, name) {
 }
 
 function normEmail(v) {
-  if (typeof v !== 'string') throw new LinkError('INVALID_EMAIL', 400);
+  if (typeof v !== 'string') throw new AppError('INVALID_EMAIL', 400);
   const e = v.trim().toLowerCase();
-  if (e.length > 254 || !EMAIL_RE.test(e)) throw new LinkError('INVALID_EMAIL', 400);
+  if (e.length > 254 || !EMAIL_RE.test(e)) throw new AppError('INVALID_EMAIL', 400);
   return e;
 }
 function checkNewPassword(pw) {
   if (typeof pw !== 'string' || pw.length < MIN_PASSWORD || pw.length > MAX_PASSWORD) {
-    throw new LinkError('WEAK_PASSWORD', 400);
+    throw new AppError('WEAK_PASSWORD', 400);
   }
 }
 
@@ -48,7 +48,9 @@ function setCookie(res, token) {
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.COOKIE_SECURE
+      ? process.env.COOKIE_SECURE === 'true'
+      : process.env.NODE_ENV === 'production',
     maxAge: SESSION_MS,
     path: '/',
   });
@@ -62,6 +64,9 @@ async function createSession(pool, res, userId) {
   ]);
   setCookie(res, token);
 }
+
+const purgeExpired = (pool) =>
+  pool.query('DELETE FROM sessions WHERE expires_at <= $1', [new Date()]);
 
 // Gắn req.user (hoặc null) và req.sessionId nếu có cookie hợp lệ.
 function loadUser(pool) {
@@ -111,6 +116,8 @@ function authRouter({ loginLimiter }) {
 
   router.post('/register', wrap(async (req, res) => {
     const pool = req.app.locals.pool;
+    if (loginLimiter.register.blocked(req.ip)) throw new AppError('TOO_MANY_ATTEMPTS', 429);
+    loginLimiter.register.hit(req.ip);
     const email = normEmail(body(req).email);
     checkNewPassword(body(req).password);
     const hash = await hashPassword(body(req).password);
@@ -120,7 +127,7 @@ function authRouter({ loginLimiter }) {
         'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email', [email, hash]
       )).rows[0];
     } catch (err) {
-      if (err && err.code === '23505') throw new LinkError('EMAIL_TAKEN', 409);
+      if (err && err.code === '23505') throw new AppError('EMAIL_TAKEN', 409);
       throw err;
     }
     await createSession(pool, res, row.id);
@@ -131,17 +138,17 @@ function authRouter({ loginLimiter }) {
     const pool = req.app.locals.pool;
     const email = typeof body(req).email === 'string' ? body(req).email.trim().toLowerCase() : '';
     const password = body(req).password;
-    if (!email || typeof password !== 'string') throw new LinkError('INVALID_CREDENTIALS', 401);
-    const key = `${email}|${req.ip}`;
-    if (loginLimiter.blocked(key)) throw new LinkError('TOO_MANY_ATTEMPTS', 429);
+    if (!email || typeof password !== 'string') throw new AppError('INVALID_CREDENTIALS', 401);
+    const keys = [['pair', `${email}|${req.ip}`], ['ip', req.ip], ['email', email]];
+    if (keys.some(([n, k]) => loginLimiter[n].blocked(k))) throw new AppError('TOO_MANY_ATTEMPTS', 429);
+    // Ghi nhận lượt thử NGAY (đồng bộ) để request song song không lách được giới hạn.
+    keys.forEach(([n, k]) => loginLimiter[n].hit(k));
     const row = (await pool.query('SELECT id, email, password_hash FROM users WHERE email = $1', [email])).rows[0];
     if (!dummyHash) dummyHash = await hashPassword('dummy-password');
     const ok = await verifyPassword(password, row ? row.password_hash : dummyHash);
-    if (!row || !ok) {
-      loginLimiter.hit(key);
-      throw new LinkError('INVALID_CREDENTIALS', 401);
-    }
-    loginLimiter.reset(key);
+    if (!row || !ok) throw new AppError('INVALID_CREDENTIALS', 401);
+    loginLimiter.pair.reset(keys[0][1]);
+    purgeExpired(pool).catch(() => {});
     await createSession(pool, res, row.id);
     res.json({ user: { id: String(row.id), email: row.email } });
   }));
@@ -159,13 +166,14 @@ function authRouter({ loginLimiter }) {
   router.post('/change-password', requireUser, wrap(async (req, res) => {
     const pool = req.app.locals.pool;
     const { currentPassword, newPassword } = body(req);
-    const row = (await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id])).rows[0];
     const key = `pw|${req.user.id}|${req.ip}`;
-    if (loginLimiter.blocked(key)) throw new LinkError('TOO_MANY_ATTEMPTS', 429);
+    if (loginLimiter.pair.blocked(key)) throw new AppError('TOO_MANY_ATTEMPTS', 429);
+    loginLimiter.pair.hit(key);
+    const row = (await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (typeof currentPassword !== 'string' || !(await verifyPassword(currentPassword, row.password_hash))) {
-      loginLimiter.hit(key);
-      throw new LinkError('INVALID_CREDENTIALS', 401);
+      throw new AppError('INVALID_CREDENTIALS', 401);
     }
+    loginLimiter.pair.reset(key);
     checkNewPassword(newPassword);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [await hashPassword(newPassword), req.user.id]);
     // Đăng xuất mọi phiên khác.
@@ -177,7 +185,21 @@ function authRouter({ loginLimiter }) {
 }
 
 function makeLoginLimiter() {
-  return new RateLimiter(Number(process.env.LOGIN_MAX_FAILS) || 5, 15 * 60 * 1000);
+  const max = Number(process.env.LOGIN_MAX_FAILS) || 5;
+  const win = 15 * 60 * 1000;
+  return {
+    pair: new RateLimiter(max, win),
+    ip: new RateLimiter(max * 5, win),
+    email: new RateLimiter(max * 3, win),
+    register: new RateLimiter(Number(process.env.REGISTER_PER_HOUR) || 10, 3600 * 1000),
+  };
 }
 
-module.exports = { authRouter, loadUser, csrf, requireUser, makeLoginLimiter, hashPassword, verifyPassword };
+// Dọn session hết hạn định kỳ (1 giờ); trả về timer đã unref.
+function startSessionCleanup(pool, ms = 3600 * 1000) {
+  const t = setInterval(() => purgeExpired(pool).catch(() => {}), ms);
+  t.unref();
+  return t;
+}
+
+module.exports = { authRouter, loadUser, csrf, requireUser, makeLoginLimiter, startSessionCleanup, hashPassword, verifyPassword };
