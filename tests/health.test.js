@@ -17,7 +17,7 @@ test('migrate is idempotent and creates links table', async () => {
   await migrate(pool);
   await pool.query("INSERT INTO links (slug, target_url) VALUES ('probe', 'http://p.com')");
   const r = await pool.query("SELECT * FROM links WHERE slug='probe'");
-  expect(Object.keys(r.rows[0]).sort()).toEqual(['clicks', 'created_at', 'id', 'slug', 'target_url', 'user_id']);
+  expect(Object.keys(r.rows[0]).sort()).toEqual(['clicks', 'created_at', 'expires_at', 'id', 'is_active', 'max_clicks', 'note', 'slug', 'target_url', 'title', 'user_id']);
   await pool.query("DELETE FROM links WHERE slug='probe'");
 });
 

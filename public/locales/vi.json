@@ -60,5 +60,21 @@
   "error.TOO_MANY_ATTEMPTS": "Nhập sai quá nhiều lần, vui lòng thử lại sau 15 phút.",
   "error.UNAUTHORIZED": "Vui lòng đăng nhập trước.",
   "error.CSRF": "Yêu cầu bị từ chối (thiếu header CSRF).",
-  "error.RATE_LIMITED": "Bạn tạo quá nhiều link, vui lòng thử lại sau."
+  "error.RATE_LIMITED": "Bạn tạo quá nhiều link, vui lòng thử lại sau.",
+  "gone.title": "410 Link không còn hiệu lực",
+  "gone.body": "Link này đã bị tắt, hết hạn hoặc đã hết lượt click.",
+  "preview.title": "Xem trước link",
+  "preview.heading": "Xem trước link",
+  "preview.destination": "Link rút gọn này dẫn tới:",
+  "preview.warning": "Chỉ tiếp tục nếu bạn tin tưởng địa chỉ này.",
+  "preview.continue": "Tiếp tục",
+  "error.SELF_REFERENCE": "URL đích không được trỏ về chính dịch vụ này.",
+  "error.INVALID_TITLE": "Tiêu đề không hợp lệ (tối đa 100 ký tự).",
+  "error.INVALID_NOTE": "Ghi chú không hợp lệ (tối đa 500 ký tự).",
+  "error.INVALID_EXPIRES": "Ngày hết hạn không hợp lệ (phải là thời điểm hợp lệ trong tương lai).",
+  "error.INVALID_MAX_CLICKS": "Giới hạn click không hợp lệ (số nguyên từ 1 đến 1.000.000.000).",
+  "error.INVALID_QUERY": "Từ khoá tìm kiếm không hợp lệ.",
+  "error.INVALID_STATUS": "Bộ lọc trạng thái không hợp lệ (active, disabled hoặc expired).",
+  "error.GONE": "Link này đã bị tắt hoặc hết hạn.",
+  "error.BULK_TOO_MANY": "Quá nhiều URL trong một lần tạo hàng loạt (tối đa 50)."
 }

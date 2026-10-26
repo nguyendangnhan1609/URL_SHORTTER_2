@@ -66,6 +66,17 @@ function renderNotFound(lang) {
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${esc(dict['notfound.title'])}</title></head><body><h1>404</h1><p>${esc(dict['notfound.body'])}</p><p><a href="/">${esc(dict['notfound.home'])}</a></p></body></html>`;
 }
 
+function renderGone(lang) {
+  const dict = DICTS[lang] || DICTS.en;
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>${esc(dict['gone.title'])}</title></head><body><h1>410</h1><p>${esc(dict['gone.body'])}</p><p><a href="/">${esc(dict['notfound.home'])}</a></p></body></html>`;
+}
+
+// Trang xem trước: hiển thị URL đích (đã escape) và nút tiếp tục qua /:slug (để áp dụng kiểm tra + đếm click).
+function renderPreview(lang, slug, url) {
+  const dict = DICTS[lang] || DICTS.en;
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><title>${esc(dict['preview.title'])}</title></head><body><h1>${esc(dict['preview.heading'])}</h1><p>${esc(dict['preview.destination'])}</p><p><code>${esc(url)}</code></p><p>${esc(dict['preview.warning'])}</p><p><a href="/${encodeURIComponent(slug)}" rel="nofollow noopener">${esc(dict['preview.continue'])}</a> <a href="/">${esc(dict['notfound.home'])}</a></p></body></html>`;
+}
+
 function pagesRouter(express, adsOption) {
   const router = express.Router();
   const ads = () => (adsOption !== undefined ? !!adsOption : String(process.env.ADS_ENABLED).toLowerCase() === 'true');
@@ -80,4 +91,4 @@ function pagesRouter(express, adsOption) {
   return router;
 }
 
-module.exports = { pagesRouter, pickLang, renderPage, renderNotFound, SUPPORTED };
+module.exports = { pagesRouter, pickLang, renderPage, renderNotFound, renderGone, renderPreview, SUPPORTED };
